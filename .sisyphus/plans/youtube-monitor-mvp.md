@@ -210,7 +210,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 
 ## TODOs
 
-- [ ] 1. 專案結構初始化
+- [x] 1. 專案結構初始化
 
   **What to do**:
   - 建立專案根目錄結構：`backend/`, `frontend/`, `nginx/`, `docs/`
@@ -319,7 +319,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `chore: initialize project structure`
   - Files: `backend/`, `frontend/`, `.env.example`, `.gitignore`
 
-- [ ] 2. SQLAlchemy Models + Alembic async 設置
+- [x] 2. SQLAlchemy Models + Alembic async 設置
 
   **What to do**:
   - 安裝後端依賴：`cd backend && pip install -e ".[dev]"`
@@ -437,7 +437,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: add SQLAlchemy models and Alembic async migration`
   - Files: `backend/src/youtube_monitor/models/`, `backend/alembic/`, `backend/alembic.ini`, `backend/tests/test_models.py`
 
-- [ ] 3. Docker Compose skeleton
+- [x] 3. Docker Compose skeleton
 
   **What to do**:
   - 建立 `docker-compose.yml` 骨架（backend + frontend services，暫時沒有完整配置）：
@@ -576,7 +576,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `chore: add Docker Compose skeleton with nginx`
   - Files: `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `nginx/nginx.conf`
 
-- [ ] 4. SQLite async 引擎配置（WAL + NullPool + Pragmas）
+- [x] 4. SQLite async 引擎配置（WAL + NullPool + Pragmas）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/database.py`：
@@ -723,7 +723,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: configure SQLite async engine with WAL pragmas`
   - Files: `backend/src/youtube_monitor/database.py`, `backend/src/youtube_monitor/config.py`, `backend/tests/conftest.py`, `backend/tests/test_database.py`
 
-- [ ] 5. JWT 認證系統（users table + auth endpoints + Bearer middleware）
+- [x] 5. JWT 認證系統（users table + auth endpoints + Bearer middleware）
 
   **What to do**:
   - 建立 `backend/src/youtube_monitor/auth/security.py`：
@@ -872,7 +872,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat(auth): add JWT authentication with multi-user support`
   - Files: `backend/src/youtube_monitor/auth/`, `backend/src/youtube_monitor/api/auth.py`, `backend/src/youtube_monitor/crud/user.py`, `backend/src/youtube_monitor/management/create_user.py`, `backend/tests/test_auth.py`
 
-- [ ] 6. Channels CRUD API 端點
+- [x] 6. Channels CRUD API 端點
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/api/channels.py`（FastAPI router）
@@ -987,7 +987,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement channels CRUD API with soft delete`
   - Files: `backend/src/youtube_monitor/api/channels.py`, `backend/src/youtube_monitor/schemas/channel.py`, `backend/src/youtube_monitor/main.py`, `backend/tests/test_channels_api.py`
 
-- [ ] 7. Videos + Snapshots 查詢 API
+- [x] 7. Videos + Snapshots 查詢 API
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/api/videos.py`（FastAPI router）
@@ -1060,7 +1060,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement videos query and stats API`
   - Files: `backend/src/youtube_monitor/api/videos.py`, `backend/src/youtube_monitor/schemas/video.py`, `backend/tests/test_videos_api.py`
 
-- [ ] 8. System API（quota 429 + logs + trigger）
+- [x] 8. System API（quota 429 + logs + trigger）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/api/system.py`（FastAPI router）
@@ -1152,7 +1152,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement system API endpoints`
   - Files: `backend/src/youtube_monitor/api/system.py`, `backend/tests/test_system_api.py`
 
-- [ ] 9. YouTube API Client Wrapper
+- [x] 9. YouTube API Client Wrapper
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/collector/youtube_client.py`
@@ -1278,7 +1278,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement YouTube API client wrapper with backoff`
   - Files: `backend/src/youtube_monitor/collector/youtube_client.py`, `backend/tests/test_youtube_client.py`
 
-- [ ] 10. Collector Job — 頻道統計快照（每日 04:00）
+- [x] 10. Collector Job — 頻道統計快照（每日 04:00）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/collector/jobs/channel_snapshot.py`
@@ -1356,7 +1356,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement channel snapshot collector job`
   - Files: `backend/src/youtube_monitor/collector/jobs/channel_snapshot.py`, `backend/tests/test_collector_channel_snapshot.py`
 
-- [ ] 11. Collector Job — 影片發現（每日 06:00）
+- [x] 11. Collector Job — 影片發現（每日 06:00）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/collector/jobs/discover_videos.py`
@@ -1431,7 +1431,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement video discovery collector job`
   - Files: `backend/src/youtube_monitor/collector/jobs/discover_videos.py`, `backend/tests/test_collector_discover_videos.py`
 
-- [ ] 12. Collector Job — 影片統計快照（每日 08:00）
+- [x] 12. Collector Job — 影片統計快照（每日 08:00）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/collector/jobs/video_snapshot.py`
@@ -1503,7 +1503,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement video stats snapshot collector job`
   - Files: `backend/src/youtube_monitor/collector/jobs/video_snapshot.py`, `backend/tests/test_collector_video_snapshot.py`
 
-- [ ] 13. React 前端鷹架（Vite + TS + shadcn/ui + TanStack Query + JWT axios interceptor）
+- [x] 13. React 前端鷹架（Vite + TS + shadcn/ui + TanStack Query + JWT axios interceptor）
 
   **What to do**:
   - 前提：Task 1 已用 Vite 初始化 `frontend/`
@@ -1636,7 +1636,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: scaffold React frontend with shadcn/ui, TanStack Query, and JWT auth client`
   - Files: `frontend/src/`, `frontend/package.json`, `frontend/vite.config.ts`
 
-- [ ] 14. Login 頁面（JWT auth flow）
+- [x] 14. Login 頁面（JWT auth flow）
 
   **What to do**:
   - 實作 `frontend/src/pages/LoginPage.tsx`：
@@ -1719,7 +1719,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: add login page with JWT authentication flow`
   - Files: `frontend/src/pages/LoginPage.tsx`, `frontend/e2e/login.spec.ts`
 
-- [ ] 15. Dashboard 首頁總覽頁
+- [x] 15. Dashboard 首頁總覽頁
 
   **What to do**:
   - 實作 `frontend/src/pages/DashboardPage.tsx`
@@ -1793,7 +1793,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement dashboard overview page`
   - Files: `frontend/src/pages/DashboardPage.tsx`
 
-- [ ] 16. 頻道列表頁
+- [x] 16. 頻道列表頁
 
   **What to do**:
   - 實作 `frontend/src/pages/ChannelListPage.tsx`
@@ -1877,7 +1877,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement channel list page with add channel dialog`
   - Files: `frontend/src/pages/ChannelListPage.tsx`, `frontend/tests/e2e/channels.spec.ts`
 
-- [ ] 17. 頻道詳情頁（含趨勢圖）
+- [x] 17. 頻道詳情頁（含趨勢圖）
 
   **What to do**:
   - 實作 `frontend/src/pages/ChannelDetailPage.tsx`（路由：`/channels/:id`）
@@ -1947,7 +1947,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement channel detail page with trend charts`
   - Files: `frontend/src/pages/ChannelDetailPage.tsx`
 
-- [ ] 18. APScheduler 整合（FastAPI lifespan）
+- [x] 18. APScheduler 整合（FastAPI lifespan）
 
   **What to do**:
   - 實作 `backend/src/youtube_monitor/collector/scheduler.py`：
@@ -2086,7 +2086,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: integrate APScheduler with FastAPI lifespan`
   - Files: `backend/src/youtube_monitor/collector/scheduler.py`, 更新 `backend/src/youtube_monitor/main.py`, `backend/tests/test_scheduler.py`
 
-- [ ] 19. 影片列表頁
+- [x] 19. 影片列表頁
 
   **What to do**:
   - 實作 `frontend/src/pages/VideoListPage.tsx`（路由：`/videos`）
@@ -2139,7 +2139,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement video list page`
   - Files: `frontend/src/pages/VideoListPage.tsx`
 
-- [ ] 20. 批次頻道匯入頁
+- [x] 20. 批次頻道匯入頁
 
   **What to do**:
   - 實作 `frontend/src/pages/ChannelImportPage.tsx`（路由：`/channels/import`）
@@ -2237,7 +2237,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: implement batch channel import page`
   - Files: `frontend/src/pages/ChannelImportPage.tsx`, 更新 `frontend/src/App.tsx`, 更新 `frontend/src/pages/ChannelListPage.tsx`
 
-- [ ] 21. Nginx 配置 + Docker Compose 最終化
+- [x] 21. Nginx 配置 + Docker Compose 最終化
 
   **What to do**:
     - 加入 `backend` 服務完整環境變數
@@ -2337,7 +2337,7 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
   - Message: `feat: finalize nginx and Docker Compose for production`
   - Files: `docker-compose.yml`, `nginx/nginx.conf`, `backend/Dockerfile`, `frontend/Dockerfile`
 
-- [ ] 22. README + 文件
+- [x] 22. README + 文件
 
   **What to do**:
   - 建立 `README.md`，包含：
@@ -2433,19 +2433,19 @@ Wave FINAL (After ALL tasks — 4 parallel reviews):
 >
 > **Do NOT auto-proceed after verification. Wait for user's explicit approval.**
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   Read the plan end-to-end. For each "Must Have": verify implementation exists. For each "Must NOT Have": search for forbidden patterns. Check evidence files exist.
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   Run `mypy backend/` + `ruff check backend/` + `pytest tests/ -v`. Review for: `# type: ignore`, empty excepts, print() in prod, commented-out code. Check AI slop: generic variable names, over-abstraction.
   Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Tests [N pass/N fail] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` + `playwright` skill
+- [x] F3. **Real Manual QA** — `unspecified-high` + `playwright` skill
   Start from `docker compose up`. Execute EVERY QA scenario from EVERY task. Test integration: add channel → trigger collector → see data in Dashboard. Save evidence to `.sisyphus/evidence/final-qa/`.
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   For each task: verify 1:1 between spec and implementation. Check no Phase 2+ features snuck in. Detect cross-task contamination.
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | VERDICT`
 

@@ -1,0 +1,71 @@
+from pydantic import BaseModel
+from datetime import datetime, date
+from typing import Optional, Any, List
+
+
+class VideoResponse(BaseModel):
+    id: int
+    youtube_video_id: str
+    channel_id: int
+    title: Optional[str] = None
+    description: Optional[str] = None
+    published_at: Optional[datetime] = None
+    duration: Optional[str] = None
+    tags: Optional[Any] = None
+    topic_categories: Optional[Any] = None
+    status: str
+    created_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class VideoListResponse(BaseModel):
+    items: List[VideoResponse]
+    total: int
+    page: int
+    limit: int
+
+
+class VideoSnapshotResponse(BaseModel):
+    id: int
+    video_id: int
+    snapshot_date: date
+    view_count: Optional[int] = None
+    like_count: Optional[int] = None
+    comment_count: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ChannelSnapshotResponse(BaseModel):
+    id: int
+    channel_id: int
+    snapshot_date: date
+    subscriber_count: Optional[int] = None
+    view_count: Optional[int] = None
+    video_count: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class StatsOverviewResponse(BaseModel):
+    total_channels: int
+    total_videos: int
+    active_channels: int
+    new_videos_this_week: int
+
+
+class ChannelTrendPoint(BaseModel):
+    date: date
+    subscriber_count: Optional[int] = None
+    view_count: Optional[int] = None
+
+
+class VideoTopItem(BaseModel):
+    id: int
+    youtube_video_id: str
+    title: Optional[str] = None
+    channel_id: int
+    view_count: Optional[int] = None
+
+    model_config = {"from_attributes": True}
