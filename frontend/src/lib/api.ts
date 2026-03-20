@@ -86,4 +86,9 @@ export async function triggerFetch() {
   return res.data;
 }
 
+export async function fetchChannelNow(id: number) {
+  const res = await api.post(`/channels/${id}/fetch`);
+  return res.data;
+}
+
 export default api;

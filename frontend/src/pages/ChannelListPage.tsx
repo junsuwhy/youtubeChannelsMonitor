@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
-import { fetchChannels, createChannel } from "@/lib/api";
+import { fetchChannels, createChannel, fetchChannelNow } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ export default function ChannelListPage() {
   const [newChannelId, setNewChannelId] = useState("");
   const [newChannelTitle, setNewChannelTitle] = useState("");
   const [formError, setFormError] = useState("");
+  const [fetchingChannels, setFetchingChannels] = useState<Set<number>>(new Set());
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['channels', statusFilter],
@@ -73,6 +74,24 @@ export default function ChannelListPage() {
         return <Badge variant="secondary">{status}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+
+  const handleFetchNow = async (e: React.MouseEvent, channelId: number) => {
+    e.stopPropagation(); // prevent row navigation
+    setFetchingChannels(prev => new Set(prev).add(channelId));
+    try {
+      await fetchChannelNow(channelId);
+      queryClient.invalidateQueries({ queryKey: ['channels'] });
+    } catch (err: unknown) {
+      const anyErr = err as { response?: { data?: { detail?: string } }; message?: string };
+      console.error("Fetch now failed for channel", channelId, anyErr?.response?.data?.detail || anyErr.message);
+    } finally {
+      setFetchingChannels(prev => {
+        const next = new Set(prev);
+        next.delete(channelId);
+        return next;
+      });
     }
   };
 
@@ -158,6 +177,7 @@ export default function ChannelListPage() {
               <TableHead className="text-right">影片數</TableHead>
               <TableHead className="w-[100px]">狀態</TableHead>
               <TableHead className="text-right">最後更新</TableHead>
+              <TableHead className="w-[100px]">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -170,11 +190,12 @@ export default function ChannelListPage() {
                   <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-[60px]" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-[100px] ml-auto" /></TableCell>
+                  <TableCell><Skeleton className="h-8 w-[80px]" /></TableCell>
                 </TableRow>
               ))
             ) : channels.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={7} className="h-32 text-center">
                   <EmptyState message="找不到頻道" />
                 </TableCell>
               </TableRow>
@@ -208,6 +229,19 @@ export default function ChannelListPage() {
                     {channel.last_fetched_at 
                       ? new Date(channel.last_fetched_at).toLocaleDateString() 
                       : '從未'}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {channel.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid="fetch-now-btn"
+                        disabled={fetchingChannels.has(channel.id)}
+                        onClick={(e) => handleFetchNow(e, channel.id)}
+                      >
+                        {fetchingChannels.has(channel.id) ? "同步中..." : "立即同步"}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

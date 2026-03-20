@@ -17,13 +17,21 @@ logger = logging.getLogger(__name__)
 
 
 async def run_discover_videos_job(
-    session: AsyncSession, youtube_client: YouTubeClient
+    session: AsyncSession,
+    youtube_client: YouTubeClient,
+    channel_id: int | None = None,
 ) -> dict:
     """
     Daily video discovery job (runs at 06:00 Taipei time).
 
+    Args:
+        session: Async SQLAlchemy session.
+        youtube_client: YouTube API client.
+        channel_id: If provided, only process the channel with this DB id.
+                    If None (default), all active channels are processed.
+
     Flow:
-    1. Query all channels with status='active'
+    1. Query all channels with status='active' (filtered by channel_id if given)
     2. For each channel:
        a. Get uploads_playlist_id (from DB or API)
        b. Fetch up to 200 video IDs from the uploads playlist
@@ -41,8 +49,10 @@ async def run_discover_videos_job(
     total_videos_processed = 0
     api_units_used = 0
 
-    # Fetch all active channels
-    result = await session.execute(select(Channel).where(Channel.status == "active"))
+    query = select(Channel).where(Channel.status == "active")
+    if channel_id is not None:
+        query = query.where(Channel.id == channel_id)
+    result = await session.execute(query)
     active_channels = result.scalars().all()
 
     try:

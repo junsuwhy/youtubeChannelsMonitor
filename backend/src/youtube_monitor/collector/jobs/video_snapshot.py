@@ -18,10 +18,18 @@ logger = logging.getLogger(__name__)
 
 
 async def run_video_snapshot_job(
-    session: AsyncSession, youtube_client: YouTubeClient
+    session: AsyncSession,
+    youtube_client: YouTubeClient,
+    channel_id: int | None = None,
 ) -> dict:
     """
     Daily video statistics snapshot job (runs at 08:00 Taipei time).
+
+    Args:
+        session: Async SQLAlchemy session.
+        youtube_client: YouTube API client.
+        channel_id: If provided, only snapshot videos belonging to this channel DB id.
+                    If None (default), all eligible videos are processed.
 
     Flow:
     1. Query videos to snapshot using 3-tier strategy:
@@ -43,38 +51,39 @@ async def run_video_snapshot_job(
     api_units_used = 0
 
     # --- Tier A: rapid_tracking_until >= today (always include) ---
-    tier_a_result = await session.execute(
-        select(Video).where(
-            Video.rapid_tracking_until >= today,
-            Video.status == "public",
-        )
+    tier_a_query = select(Video).where(
+        Video.rapid_tracking_until >= today,
+        Video.status == "public",
     )
+    if channel_id is not None:
+        tier_a_query = tier_a_query.where(Video.channel_id == channel_id)
+    tier_a_result = await session.execute(tier_a_query)
     tier_a_videos = tier_a_result.scalars().all()
 
     # --- Tier B: published within last 30 days, not on rapid tracking ---
     cutoff_30 = today - timedelta(days=30)
-    tier_b_result = await session.execute(
-        select(Video).where(
-            Video.published_at
-            >= datetime(
-                cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc
-            ),
-            (Video.rapid_tracking_until == None) | (Video.rapid_tracking_until < today),  # noqa: E711
-            Video.status == "public",
-        )
+    tier_b_query = select(Video).where(
+        Video.published_at
+        >= datetime(
+            cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc
+        ),
+        (Video.rapid_tracking_until == None) | (Video.rapid_tracking_until < today),  # noqa: E711
+        Video.status == "public",
     )
+    if channel_id is not None:
+        tier_b_query = tier_b_query.where(Video.channel_id == channel_id)
+    tier_b_result = await session.execute(tier_b_query)
     tier_b_videos = tier_b_result.scalars().all()
 
     # --- Tier C: published > 30 days ago — downsample: skip if already has snapshot this ISO week ---
-    tier_c_result = await session.execute(
-        select(Video).where(
-            Video.published_at
-            < datetime(
-                cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc
-            ),
-            Video.status == "public",
-        )
+    tier_c_query = select(Video).where(
+        Video.published_at
+        < datetime(cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc),
+        Video.status == "public",
     )
+    if channel_id is not None:
+        tier_c_query = tier_c_query.where(Video.channel_id == channel_id)
+    tier_c_result = await session.execute(tier_c_query)
     tier_c_all = tier_c_result.scalars().all()
 
     # Downsampling: only include Tier C videos that don't have a snapshot this ISO calendar week

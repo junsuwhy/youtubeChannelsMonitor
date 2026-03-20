@@ -111,3 +111,109 @@ async def test_soft_delete_channel(api_client):
     get_resp = await api_client.get(f"/api/channels/{channel_id}")
     assert get_resp.status_code == 200
     assert get_resp.json()["status"] == "inactive"
+
+
+# ── Fetch Now endpoint tests ──────────────────────────────────────────────────
+
+
+async def test_fetch_channel_now_not_found(api_client):
+    """POST /channels/99999/fetch → 404 for non-existent channel."""
+    response = await api_client.post("/api/channels/99999/fetch")
+    assert response.status_code == 404
+
+
+async def test_fetch_channel_now_inactive_404(api_client):
+    """POST /channels/{id}/fetch → 404 for inactive channel."""
+    create_resp = await api_client.post(
+        "/api/channels", json={"youtube_channel_id": "UCinactive_fetch"}
+    )
+    assert create_resp.status_code == 201
+    channel_id = create_resp.json()["id"]
+    await api_client.delete(f"/api/channels/{channel_id}")  # soft-delete → inactive
+
+    response = await api_client.post(f"/api/channels/{channel_id}/fetch")
+    assert response.status_code == 404
+
+
+async def test_fetch_channel_now_quota_exhausted_429(api_client, test_engine):
+    """POST /channels/{id}/fetch → 429 when remaining quota == 0."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from youtube_monitor.models.fetch_log import FetchLog
+    from datetime import datetime, timezone
+
+    # Create channel
+    create_resp = await api_client.post(
+        "/api/channels", json={"youtube_channel_id": "UCquota_test_fetch"}
+    )
+    assert create_resp.status_code == 201
+    channel_id = create_resp.json()["id"]
+
+    # Exhaust quota by inserting a FetchLog that uses all 10000 units
+    async_session = async_sessionmaker(test_engine, expire_on_commit=False)
+    async with async_session() as session:
+        log = FetchLog(
+            job_name="manual",
+            status="success",
+            channels_processed=0,
+            videos_processed=0,
+            api_units_used=10000,
+            error_message=None,
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
+        )
+        session.add(log)
+        await session.commit()
+
+    response = await api_client.post(f"/api/channels/{channel_id}/fetch")
+    assert response.status_code == 429
+
+
+async def test_fetch_channel_now_success(api_client):
+    """POST /channels/{id}/fetch → 200 with correct response shape (mocked jobs)."""
+    from unittest.mock import AsyncMock, patch
+
+    create_resp = await api_client.post(
+        "/api/channels", json={"youtube_channel_id": "UCsuccess_fetch"}
+    )
+    assert create_resp.status_code == 201
+    channel_id = create_resp.json()["id"]
+
+    mock_result = {"status": "success", "channels_processed": 1, "api_units_used": 1}
+    with (
+        patch(
+            "youtube_monitor.api.channels.run_channel_snapshot_job",
+            new_callable=AsyncMock,
+            return_value=mock_result,
+        ) as mock_snap,
+        patch(
+            "youtube_monitor.api.channels.run_discover_videos_job",
+            new_callable=AsyncMock,
+            return_value={
+                "status": "success",
+                "videos_processed": 0,
+                "api_units_used": 1,
+            },
+        ),
+        patch(
+            "youtube_monitor.api.channels.run_video_snapshot_job",
+            new_callable=AsyncMock,
+            return_value={
+                "status": "success",
+                "videos_processed": 0,
+                "api_units_used": 1,
+            },
+        ),
+        patch("youtube_monitor.api.channels.YouTubeClient"),
+    ):
+        response = await api_client.post(f"/api/channels/{channel_id}/fetch")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["channel_id"] == channel_id
+    assert "channel_status" in data
+    assert "results" in data
+    assert "channel_snapshot" in data["results"]
+    assert "discover_videos" in data["results"]
+    assert "video_snapshot" in data["results"]
+    mock_snap.assert_called_once()
