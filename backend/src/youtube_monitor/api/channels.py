@@ -17,6 +17,7 @@ from youtube_monitor.collector.jobs.video_snapshot import run_video_snapshot_job
 from youtube_monitor.collector.youtube_client import YouTubeClient
 from youtube_monitor.config import settings
 from youtube_monitor.api.system import _get_used_today, QUOTA_LIMIT
+from googleapiclient.errors import HttpError as YouTubeHttpError
 
 # Import get_current_user — this will be available once T5 completes
 # For now we create a placeholder that will be overridden
@@ -170,17 +171,23 @@ async def fetch_channel_now(
 
     from youtube_monitor.database import AsyncSessionLocal
 
-    async with AsyncSessionLocal() as session:
-        results["channel_snapshot"] = await run_channel_snapshot_job(
-            session, youtube_client, channel_id=channel_id
-        )
-    async with AsyncSessionLocal() as session:
-        results["discover_videos"] = await run_discover_videos_job(
-            session, youtube_client, channel_id=channel_id
-        )
-    async with AsyncSessionLocal() as session:
-        results["video_snapshot"] = await run_video_snapshot_job(
-            session, youtube_client, channel_id=channel_id
+    try:
+        async with AsyncSessionLocal() as session:
+            results["channel_snapshot"] = await run_channel_snapshot_job(
+                session, youtube_client, channel_id=channel_id
+            )
+        async with AsyncSessionLocal() as session:
+            results["discover_videos"] = await run_discover_videos_job(
+                session, youtube_client, channel_id=channel_id
+            )
+        async with AsyncSessionLocal() as session:
+            results["video_snapshot"] = await run_video_snapshot_job(
+                session, youtube_client, channel_id=channel_id
+            )
+    except YouTubeHttpError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"YouTube API error: {e.reason}",
         )
 
     # 4. Re-fetch channel to get updated status

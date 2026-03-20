@@ -217,3 +217,33 @@ async def test_fetch_channel_now_success(api_client):
     assert "discover_videos" in data["results"]
     assert "video_snapshot" in data["results"]
     mock_snap.assert_called_once()
+
+
+async def test_fetch_channel_now_youtube_api_error_502(api_client):
+    """POST /channels/{id}/fetch → 502 when YouTube API returns an error (e.g. invalid key)."""
+    from unittest.mock import AsyncMock, patch
+    from googleapiclient.errors import HttpError
+    from unittest.mock import MagicMock
+
+    create_resp = await api_client.post(
+        "/api/channels", json={"youtube_channel_id": "UCapi_error_test"}
+    )
+    assert create_resp.status_code == 201
+    channel_id = create_resp.json()["id"]
+
+    # Simulate YouTube API 400 error (e.g. invalid API key)
+    fake_resp = MagicMock()
+    fake_resp.status = 400
+    fake_resp.reason = "Bad Request"
+    fake_error = HttpError(resp=fake_resp, content=b"API key not valid")
+    fake_error.reason = "API key not valid. Please pass a valid API key."
+
+    with patch(
+        "youtube_monitor.api.channels.run_channel_snapshot_job",
+        new_callable=AsyncMock,
+        side_effect=fake_error,
+    ):
+        response = await api_client.post(f"/api/channels/{channel_id}/fetch")
+
+    assert response.status_code == 502
+    assert "YouTube API error" in response.json()["detail"]
