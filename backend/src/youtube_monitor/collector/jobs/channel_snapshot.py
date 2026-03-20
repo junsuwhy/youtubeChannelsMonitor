@@ -88,6 +88,10 @@ async def run_channel_snapshot_job(
                 .where(Channel.id == channel.id)
                 .values(
                     channel_name=data["channel_name"],
+                    description=data.get("description"),
+                    thumbnail_url=data.get("thumbnail_url"),
+                    country=data.get("country"),
+                    custom_url=data.get("custom_url"),
                     updated_at=datetime.now(timezone.utc),
                 )
             )

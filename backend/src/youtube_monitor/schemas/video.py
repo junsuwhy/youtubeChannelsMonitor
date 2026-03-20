@@ -7,6 +7,7 @@ class VideoResponse(BaseModel):
     id: int
     youtube_video_id: str
     channel_id: int
+    channel_name: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     published_at: Optional[datetime] = None
@@ -15,6 +16,10 @@ class VideoResponse(BaseModel):
     topic_categories: Optional[Any] = None
     status: str
     created_at: Optional[datetime] = None
+    thumbnail_url: Optional[str] = None
+    view_count: Optional[int] = None
+    like_count: Optional[int] = None
+    comment_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

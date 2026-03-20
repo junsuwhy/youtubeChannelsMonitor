@@ -34,7 +34,8 @@ async def list_videos(
     videos, total = await video_crud.get_videos(
         db, channel_id=channel_id, page=page, limit=limit
     )
-    return VideoListResponse(items=videos, total=total, page=page, limit=limit)
+    items = [VideoResponse.model_validate(v) for v in videos]
+    return VideoListResponse(items=items, total=total, page=page, limit=limit)
 
 
 @router.get("/videos/{video_id}", response_model=VideoResponse)
@@ -76,7 +77,8 @@ async def list_channel_videos(
     videos, total = await video_crud.get_videos(
         db, channel_id=channel_id, page=page, limit=limit
     )
-    return VideoListResponse(items=videos, total=total, page=page, limit=limit)
+    items = [VideoResponse.model_validate(v) for v in videos]
+    return VideoListResponse(items=items, total=total, page=page, limit=limit)
 
 
 @router.get(
