@@ -31,6 +31,9 @@ class ChannelResponse(BaseModel):
     source: str
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    subscriber_count: Optional[int] = None
+    video_count: Optional[int] = None
+    total_view_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
 

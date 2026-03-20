@@ -19,14 +19,21 @@ from youtube_monitor.config import settings
 from youtube_monitor.api.system import _get_used_today, QUOTA_LIMIT
 from googleapiclient.errors import HttpError as YouTubeHttpError
 
-# Import get_current_user — this will be available once T5 completes
-# For now we create a placeholder that will be overridden
 try:
     from youtube_monitor.auth.deps import get_current_user
 except ImportError:
-    # T5 not yet complete — will be fixed when T5 runs
+
     async def get_current_user():
         pass
+
+
+def _channel_response(channel, stats: dict) -> ChannelResponse:
+    return ChannelResponse(
+        **{
+            **{c.key: getattr(channel, c.key) for c in channel.__table__.columns},
+            **stats,
+        }
+    )
 
 
 router = APIRouter(tags=["channels"])
@@ -71,7 +78,11 @@ async def list_channels(
     channels, total = await channel_crud.get_channels(
         db, status=status, page=page, limit=limit
     )
-    return ChannelListResponse(items=channels, total=total, page=page, limit=limit)
+    stats_map = await channel_crud.get_latest_snapshot_stats(
+        db, [c.id for c in channels]
+    )
+    items = [_channel_response(c, stats_map.get(c.id, {})) for c in channels]
+    return ChannelListResponse(items=items, total=total, page=page, limit=limit)
 
 
 @router.post(
@@ -105,7 +116,8 @@ async def get_channel(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found"
         )
-    return channel
+    stats_map = await channel_crud.get_latest_snapshot_stats(db, [channel_id])
+    return _channel_response(channel, stats_map.get(channel_id, {}))
 
 
 @router.patch("/channels/{channel_id}", response_model=ChannelResponse)
@@ -120,7 +132,9 @@ async def update_channel(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found"
         )
-    return await channel_crud.update_channel(db, channel, data)
+    channel = await channel_crud.update_channel(db, channel, data)
+    stats_map = await channel_crud.get_latest_snapshot_stats(db, [channel_id])
+    return _channel_response(channel, stats_map.get(channel_id, {}))
 
 
 @router.delete("/channels/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)

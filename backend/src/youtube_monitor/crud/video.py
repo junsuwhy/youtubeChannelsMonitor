@@ -14,9 +14,9 @@ async def get_videos(
     page: int = 1,
     limit: int = 50,
 ) -> tuple[List[Video], int]:
-    query = select(Video).where(Video.status == "active")
+    query = select(Video).where(Video.status == "public")
     count_query = (
-        select(func.count()).select_from(Video).where(Video.status == "active")
+        select(func.count()).select_from(Video).where(Video.status == "public")
     )
 
     if channel_id:
@@ -100,7 +100,7 @@ async def get_top_videos(
 async def get_new_videos(db: AsyncSession, limit: int = 20) -> List[Video]:
     result = await db.execute(
         select(Video)
-        .where(Video.status == "active")
+        .where(Video.status == "public")
         .order_by(desc(Video.created_at))
         .limit(limit)
     )

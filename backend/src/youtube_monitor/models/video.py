@@ -24,7 +24,7 @@ class Video(Base):
     duration: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     tags: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
     topic_categories: Mapped[Optional[Any]] = mapped_column(JSON, nullable=True)
-    status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="public", nullable=False)
     rapid_tracking_until: Mapped[Optional[datetime.date]] = mapped_column(
         Date, nullable=True
     )

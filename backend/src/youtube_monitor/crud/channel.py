@@ -1,8 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
-from typing import Optional, List
+from typing import Optional, List, Dict
 from youtube_monitor.models.channel import Channel
+from youtube_monitor.models.channel_snapshot import ChannelSnapshot
 from youtube_monitor.schemas.channel import ChannelCreate, ChannelUpdate
 
 
@@ -71,3 +72,34 @@ async def soft_delete_channel(db: AsyncSession, channel: Channel) -> Channel:
     await db.commit()
     await db.refresh(channel)
     return channel
+
+
+async def get_latest_snapshot_stats(
+    db: AsyncSession, channel_ids: List[int]
+) -> Dict[int, dict]:
+    if not channel_ids:
+        return {}
+    latest_date_subq = (
+        select(
+            ChannelSnapshot.channel_id,
+            func.max(ChannelSnapshot.snapshot_date).label("max_date"),
+        )
+        .where(ChannelSnapshot.channel_id.in_(channel_ids))
+        .group_by(ChannelSnapshot.channel_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(ChannelSnapshot).join(
+            latest_date_subq,
+            (ChannelSnapshot.channel_id == latest_date_subq.c.channel_id)
+            & (ChannelSnapshot.snapshot_date == latest_date_subq.c.max_date),
+        )
+    )
+    return {
+        row.channel_id: {
+            "subscriber_count": row.subscriber_count,
+            "video_count": row.video_count,
+            "total_view_count": row.view_count,
+        }
+        for row in result.scalars().all()
+    }
