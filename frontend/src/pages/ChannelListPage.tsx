@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, Link } from "react-router-dom";
-import { fetchChannels, createChannel, fetchChannelNow } from "@/lib/api";
+import { fetchChannels, createChannel, fetchChannelNow, resolveChannelUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,9 @@ export default function ChannelListPage() {
 
   const [newChannelId, setNewChannelId] = useState("");
   const [newChannelTitle, setNewChannelTitle] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState("");
   const [formError, setFormError] = useState("");
   const [fetchingChannels, setFetchingChannels] = useState<Set<number>>(new Set());
 
@@ -37,6 +40,8 @@ export default function ChannelListPage() {
       setDialogOpen(false);
       setNewChannelId("");
       setNewChannelTitle("");
+      setUrlInput("");
+      setResolveError("");
       setFormError("");
     },
     onError: (err: any) => {
@@ -47,6 +52,31 @@ export default function ChannelListPage() {
       }
     }
   });
+
+  const handleUrlChange = async (value: string) => {
+    setUrlInput(value);
+    setResolveError("");
+
+    const looksLikeUrl = value.includes("youtube.com") || value.includes("youtu.be");
+    if (!looksLikeUrl) {
+      setNewChannelId(value);
+      return;
+    }
+
+    setResolving(true);
+    setNewChannelId("");
+    try {
+      const result = await resolveChannelUrl(value);
+      setNewChannelId(result.youtube_channel_id);
+      if (result.channel_name && !newChannelTitle) {
+        setNewChannelTitle(result.channel_name);
+      }
+    } catch (err: any) {
+      setResolveError(err.response?.data?.detail || "無法解析此頻道網址");
+    } finally {
+      setResolving(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +152,8 @@ export default function ChannelListPage() {
             if (!open) {
               setNewChannelId("");
               setNewChannelTitle("");
+              setUrlInput("");
+              setResolveError("");
               setFormError("");
             }
           }}>
@@ -134,14 +166,19 @@ export default function ChannelListPage() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4 pt-4">
                 <div className="space-y-2">
-                  <Label htmlFor="youtube_channel_id">YouTube Channel ID <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="url_input">頻道網址或 Channel ID <span className="text-red-500">*</span></Label>
                   <Input
-                    id="youtube_channel_id"
-                    placeholder="UC..."
-                    value={newChannelId}
-                    onChange={(e) => setNewChannelId(e.target.value)}
+                    id="url_input"
+                    placeholder="貼上頻道網址或輸入 UC..."
+                    value={urlInput}
+                    onChange={(e) => handleUrlChange(e.target.value)}
                     disabled={mutation.isPending}
                   />
+                  {resolving && <p className="text-sm text-muted-foreground">解析中...</p>}
+                  {resolveError && <p className="text-sm text-red-500">{resolveError}</p>}
+                  {!resolving && !resolveError && newChannelId && urlInput !== newChannelId && (
+                    <p className="text-sm text-green-600">Channel ID：{newChannelId}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="channel_title">自訂名稱 (選填)</Label>
@@ -155,7 +192,7 @@ export default function ChannelListPage() {
                 </div>
                 {formError && <p className="text-sm text-red-500">{formError}</p>}
                 <div className="flex justify-end pt-4">
-                  <Button type="submit" disabled={mutation.isPending}>
+                  <Button type="submit" disabled={mutation.isPending || resolving || !newChannelId}>
                     {mutation.isPending ? "新增中..." : "確認新增"}
                   </Button>
                 </div>

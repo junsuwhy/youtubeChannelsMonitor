@@ -238,10 +238,13 @@ async def test_fetch_channel_now_youtube_api_error_502(api_client):
     fake_error = HttpError(resp=fake_resp, content=b"API key not valid")
     fake_error.reason = "API key not valid. Please pass a valid API key."
 
-    with patch(
-        "youtube_monitor.api.channels.run_channel_snapshot_job",
-        new_callable=AsyncMock,
-        side_effect=fake_error,
+    with (
+        patch("youtube_monitor.api.channels.YouTubeClient"),
+        patch(
+            "youtube_monitor.api.channels.run_channel_snapshot_job",
+            new_callable=AsyncMock,
+            side_effect=fake_error,
+        ),
     ):
         response = await api_client.post(f"/api/channels/{channel_id}/fetch")
 

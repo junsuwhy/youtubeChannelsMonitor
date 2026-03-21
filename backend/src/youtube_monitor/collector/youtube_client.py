@@ -43,6 +43,39 @@ class YouTubeClient:
                     continue
                 raise
 
+    async def resolve_channel_by_handle(self, handle: str) -> Optional[dict]:
+        """channels.list(forHandle=...): 1 unit per call.
+        Resolves @handle or custom URL name to channel data.
+        Returns minimal channel info dict or None if not found."""
+
+        async def _call():
+            return await self._run_in_executor(
+                lambda: (
+                    self._service.channels()
+                    .list(
+                        part="snippet",
+                        forHandle=handle,
+                        maxResults=1,
+                    )
+                    .execute()
+                )
+            )
+
+        response = await self._with_backoff(_call)
+        items = response.get("items", [])
+        if not items:
+            return None
+
+        item = items[0]
+        snippet = item.get("snippet", {})
+        return {
+            "youtube_channel_id": item["id"],
+            "channel_name": snippet.get("title", ""),
+            "thumbnail_url": snippet.get("thumbnails", {})
+            .get("default", {})
+            .get("url", ""),
+        }
+
     async def get_channel_info(self, channel_id: str) -> Optional[dict]:
         """channels.list: 1 unit per call. Returns channel data or None if not found."""
 

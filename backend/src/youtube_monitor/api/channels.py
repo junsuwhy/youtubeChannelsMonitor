@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
@@ -65,6 +66,70 @@ async def _run_channel_fetch_background(channel_id: int) -> None:
         logger.info("Background fetch completed for channel %d", channel_id)
     except Exception as e:
         logger.error("Background fetch failed for channel %d: %s", channel_id, e)
+
+
+def _parse_channel_id_from_url(url: str) -> tuple[str | None, str | None]:
+    """Extract channel_id or handle from a YouTube URL.
+
+    Returns (channel_id, handle) where one is set and the other is None.
+    Returns (None, None) if the input doesn't look like a YouTube URL — treat as raw ID.
+    """
+    url = url.strip()
+
+    channel_id_match = re.search(r"youtube\.com/channel/(UC[\w-]{20,})", url)
+    if channel_id_match:
+        return channel_id_match.group(1), None
+
+    handle_match = re.search(r"youtube\.com/@([\w.-]+)", url)
+    if handle_match:
+        return None, handle_match.group(1)
+
+    custom_match = re.search(r"youtube\.com/c/([\w.-]+)", url)
+    if custom_match:
+        return None, custom_match.group(1)
+
+    user_match = re.search(r"youtube\.com/user/([\w.-]+)", url)
+    if user_match:
+        return None, user_match.group(1)
+
+    return None, None
+
+
+@router.get("/channels/resolve")
+async def resolve_channel_url(
+    url: str = Query(..., description="YouTube channel URL or channel ID"),
+    current_user: User = Depends(get_current_user),
+):
+    url = url.strip()
+    channel_id, handle = _parse_channel_id_from_url(url)
+
+    if channel_id is None and handle is None:
+        if url.startswith("UC") and len(url) >= 22:
+            return {
+                "youtube_channel_id": url,
+                "channel_name": None,
+                "thumbnail_url": None,
+            }
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="無法識別的頻道網址格式",
+        )
+
+    if channel_id:
+        return {
+            "youtube_channel_id": channel_id,
+            "channel_name": None,
+            "thumbnail_url": None,
+        }
+
+    youtube_client = YouTubeClient(api_key=settings.youtube_api_key)
+    result = await youtube_client.resolve_channel_by_handle(handle)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"找不到頻道：{handle}",
+        )
+    return result
 
 
 @router.get("/channels", response_model=ChannelListResponse)

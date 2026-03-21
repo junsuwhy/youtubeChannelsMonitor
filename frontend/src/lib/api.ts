@@ -86,6 +86,11 @@ export async function triggerFetch() {
   return res.data;
 }
 
+export async function resolveChannelUrl(url: string): Promise<{ youtube_channel_id: string; channel_name: string | null; thumbnail_url: string | null }> {
+  const res = await api.get("/channels/resolve", { params: { url } });
+  return res.data;
+}
+
 export async function fetchChannelNow(id: number) {
   const res = await api.post(`/channels/${id}/fetch`);
   return res.data;

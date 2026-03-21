@@ -122,7 +122,13 @@ async def test_no_search_list_usage():
     import subprocess
 
     result = subprocess.run(
-        ["grep", "-r", "search().list", "src/youtube_monitor/collector/"],
+        [
+            "grep",
+            "-r",
+            "--include=*.py",
+            "search().list",
+            "src/youtube_monitor/collector/",
+        ],
         capture_output=True,
         text=True,
         cwd="/root/Projects/youtubeChannelsMonitor/backend",
