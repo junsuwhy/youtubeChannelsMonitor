@@ -1,4 +1,10 @@
 import axios from "axios";
+import type {
+  Channel, ChannelListResponse, ChannelSnapshot,
+  Video, VideoListResponse, VideoSnapshot,
+  AnomalyListResponse,
+  FetchLogListResponse, StatsOverview, QuotaResponse,
+} from "@/types/index";
 
 const api = axios.create({ baseURL: "/api" });
 
@@ -37,7 +43,15 @@ export async function refreshToken(token: string) {
   return res.data;
 }
 
-export async function fetchChannels(params?: { status?: string; page?: number; limit?: number }) {
+export async function fetchChannels(params?: {
+  status?: string;
+  source?: string;
+  tags?: string;
+  search?: string;
+  sort_by?: string;
+  page?: number;
+  limit?: number;
+}): Promise<ChannelListResponse> {
   const res = await api.get("/channels", { params });
   return res.data;
 }
@@ -51,22 +65,32 @@ export async function deleteChannel(id: number) {
   await api.delete(`/channels/${id}`);
 }
 
-export async function fetchSystemQuota() {
+export async function fetchSystemQuota(): Promise<QuotaResponse> {
   const res = await api.get("/system/quota");
   return res.data;
 }
 
-export async function fetchStatsOverview() {
+export async function fetchStatsOverview(): Promise<StatsOverview> {
   const res = await api.get("/stats/overview");
   return res.data;
 }
 
-export async function fetchVideos(params?: { channel_id?: number; page?: number; limit?: number }) {
+export async function fetchVideos(params?: {
+  channel_id?: number;
+  title?: string;
+  status?: string;
+  include_non_public?: boolean;
+  published_after?: string;
+  published_before?: string;
+  sort_by?: string;
+  page?: number;
+  limit?: number;
+}): Promise<VideoListResponse> {
   const res = await api.get("/videos", { params });
   return res.data;
 }
 
-export async function fetchChannel(id: number) {
+export async function fetchChannel(id: number): Promise<Channel> {
   const res = await api.get(`/channels/${id}`);
   return res.data;
 }
@@ -93,6 +117,49 @@ export async function resolveChannelUrl(url: string): Promise<{ youtube_channel_
 
 export async function fetchChannelNow(id: number) {
   const res = await api.post(`/channels/${id}/fetch`);
+  return res.data;
+}
+
+export async function fetchChannelSnapshots(channelId: number): Promise<ChannelSnapshot[]> {
+  const res = await api.get(`/stats/channels/${channelId}/snapshots`);
+  return res.data;
+}
+
+export async function fetchVideoSnapshots(videoId: number): Promise<VideoSnapshot[]> {
+  const res = await api.get(`/videos/${videoId}/snapshots`);
+  return res.data;
+}
+
+export async function fetchChannelAnomalies(
+  channelId: number,
+  params?: { event_type?: string; page?: number; limit?: number }
+): Promise<AnomalyListResponse> {
+  const res = await api.get(`/channels/${channelId}/anomalies`, { params });
+  return res.data;
+}
+
+export async function fetchFetchLogs(params?: {
+  job_type?: string;
+  channel_id?: number;
+  page?: number;
+  limit?: number;
+}): Promise<FetchLogListResponse> {
+  const res = await api.get("/system/logs", { params });
+  return res.data;
+}
+
+export async function updateChannel(id: number, data: Partial<Pick<Channel, "status" | "tags" | "source" | "notes">>): Promise<Channel> {
+  const res = await api.patch(`/channels/${id}`, data);
+  return res.data;
+}
+
+export async function fetchChannelTags(): Promise<string[]> {
+  const res = await api.get("/channels/tags");
+  return res.data;
+}
+
+export async function fetchVideo(id: number): Promise<Video> {
+  const res = await api.get(`/videos/${id}`);
   return res.data;
 }
 

@@ -9,13 +9,6 @@ from alembic import context
 
 from youtube_monitor.models import (
     Base,
-    Channel,
-    ChannelSnapshot,
-    Video,
-    VideoSnapshot,
-    FetchLog,
-    CofactsSource,
-    User,
 )
 
 # this is the Alembic Config object, which provides

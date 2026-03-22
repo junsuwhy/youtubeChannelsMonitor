@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -26,12 +26,6 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
   const [newTag, setNewTag] = useState("");
   const [localNotes, setLocalNotes] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    if (channel) {
-      setLocalNotes((channel as any).notes || "");
-    }
-  }, [channel]);
 
   if (!channel) return null;
 
@@ -65,10 +59,8 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
   };
 
   const handleSaveNotes = () => {
-    updateChannelMutation.mutate({
-      id: channelId,
-      data: { notes: localNotes } as any
-    });
+    // Notes field is not yet supported by the backend
+    alert("功能即將推出");
   };
 
   const handleDeleteChannel = async () => {
@@ -186,7 +178,7 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
             <div className="flex justify-end pt-2">
               <Button 
                 onClick={handleSaveNotes} 
-                disabled={localNotes === ((channel as any).notes || "") || updateChannelMutation.isPending}
+                data-testid="settings-save-notes"
               >
                 儲存備註
               </Button>
@@ -211,7 +203,7 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
             
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" data-testid="settings-remove-button">
+                <Button variant="destructive" data-testid="settings-delete-channel">
                   移除此頻道
                 </Button>
               </AlertDialogTrigger>

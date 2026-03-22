@@ -36,7 +36,7 @@ export function AnomaliesTab({ channelId }: AnomaliesTabProps) {
     <div className="space-y-4" data-testid="channel-anomalies-tab">
       {error && <ErrorBanner message={error instanceof Error ? error.message : "載入失敗"} />}
 
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -61,7 +61,7 @@ export function AnomaliesTab({ channelId }: AnomaliesTabProps) {
             ) : anomalies.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="h-32 text-center">
-                  <EmptyState message="目前沒有偵測到異常事件" />
+                  <EmptyState message="目前沒有偵測到異常事件" testId="empty-state-anomalies" />
                 </TableCell>
               </TableRow>
             ) : (

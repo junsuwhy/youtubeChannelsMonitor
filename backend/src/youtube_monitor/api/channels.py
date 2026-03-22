@@ -1,5 +1,6 @@
 import re
 from fastapi import APIRouter, Depends, HTTPException, status, Query, BackgroundTasks
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
@@ -135,19 +136,50 @@ async def resolve_channel_url(
 @router.get("/channels", response_model=ChannelListResponse)
 async def list_channels(
     status: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    tags: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    sort_by: str | None = Query(
+        default=None,
+        pattern="^(subscriber_count|video_count|view_count|created_at|updated_at)$",
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    tags_list = tags.split(",") if tags else None
     channels, total = await channel_crud.get_channels(
-        db, status=status, page=page, limit=limit
+        db,
+        status=status,
+        source=source,
+        tags=tags_list,
+        search=search,
+        sort_by=sort_by,
+        page=page,
+        limit=limit,
     )
     stats_map = await channel_crud.get_latest_snapshot_stats(
         db, [c.id for c in channels]
     )
     items = [_channel_response(c, stats_map.get(c.id, {})) for c in channels]
     return ChannelListResponse(items=items, total=total, page=page, limit=limit)
+
+
+@router.get("/channels/tags")
+async def get_channel_tags(
+    db: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[str]:
+    result = await db.execute(
+        text(
+            "SELECT DISTINCT json_each.value"
+            " FROM channels, json_each(channels.tags)"
+            " WHERE channels.tags IS NOT NULL AND channels.tags != '[]'"
+            " ORDER BY json_each.value"
+        )
+    )
+    return [row[0] for row in result.fetchall()]
 
 
 @router.post(

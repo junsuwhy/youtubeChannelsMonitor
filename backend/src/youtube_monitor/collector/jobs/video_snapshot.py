@@ -1,5 +1,4 @@
 import logging
-import math
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update

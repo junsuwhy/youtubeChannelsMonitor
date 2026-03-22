@@ -1,11 +1,13 @@
 import { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import React from "react";
 import { Users, Eye, Video, TrendingUp, MoreHorizontal, Slash, Lock, ChevronDown, ChevronUp, EyeOff, AlertTriangle, Edit } from "lucide-react";
 
 import { fetchChannelTrend, fetchVideos, fetchChannelNow, deleteChannel } from "@/lib/api";
 import { useChannel, useChannelSnapshots, useUpdateChannel } from "@/hooks/useChannels";
 import { useChannelAnomalies } from "@/hooks/useAnomalies";
+import type { Video as VideoType, ChannelTrendPoint, AnomalyEvent } from "@/types";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -104,7 +106,7 @@ export default function ChannelDetailPage() {
   const handleSaveNotes = () => {
     updateChannelMutation.mutate({
       id: channelId,
-      data: { notes: notesText } as any
+      data: { notes: notesText }
     });
     setNotesDialogOpen(false);
   };
@@ -168,14 +170,14 @@ export default function ChannelDetailPage() {
     const days = timeRange === "7D" ? 7 : timeRange === "30D" ? 30 : timeRange === "90D" ? 90 : 365;
     const now = new Date();
     const cutoffDate = new Date(now.setDate(now.getDate() - days));
-    return trend.filter((d: any) => new Date(d.date) >= cutoffDate);
+    return trend.filter((d: ChannelTrendPoint) => new Date(d.date) >= cutoffDate);
   }, [trend, timeRange]);
 
   const trendChartData = useMemo(() => {
     const dataKey = metric === 'subscriber' ? 'subscriber_count' : 'view_count';
-    return filteredTrendData.map((d: any) => ({
+    return filteredTrendData.map((d: ChannelTrendPoint) => ({
       date: d.date,
-      value: (d[dataKey] as number) || 0
+      value: (d[dataKey as keyof ChannelTrendPoint] as number) || 0
     }));
   }, [filteredTrendData, metric]);
 
@@ -183,7 +185,7 @@ export default function ChannelDetailPage() {
     if (metric !== 'video') return [];
     
     const weeks: Record<string, number> = {};
-    videos.forEach((v: any) => {
+    videos.forEach((v: VideoType) => {
       if (!v.published_at) return;
       const d = new Date(v.published_at);
       const day = d.getDay() || 7; 
@@ -211,10 +213,10 @@ export default function ChannelDetailPage() {
   }, [videos, metric, timeRange]);
 
   const timelineEvents = useMemo(() => {
-    type EventItem = { type: string; date: string; title: string; desc?: string; id: string; Icon: any; iconColor: string; bgColor: string };
+    type EventItem = { type: string; date: string; title: string; desc?: string; id: string; Icon: React.ComponentType<{ className?: string }>; iconColor: string; bgColor: string };
     const events: EventItem[] = [];
     
-    videos.forEach((v: any) => {
+    videos.forEach((v: VideoType) => {
       if (v.published_at) {
         events.push({
           type: 'video',
@@ -229,9 +231,9 @@ export default function ChannelDetailPage() {
       }
     });
 
-    anomalies.forEach((a: any) => {
-      if (a.detected_at || a.created_at || a.date || a.snapshot_date) {
-        const type = a.event_type || a.anomaly_type || '';
+    anomalies.forEach((a: AnomalyEvent) => {
+      if (a.detected_at || a.snapshot_date) {
+        const type = a.event_type || '';
         let Icon = AlertTriangle;
         let iconColor = "text-red-600";
         let bgColor = "bg-red-100";
@@ -254,9 +256,9 @@ export default function ChannelDetailPage() {
 
         events.push({
           type: 'anomaly',
-          date: a.detected_at || a.created_at || a.date || a.snapshot_date,
+          date: a.detected_at || a.snapshot_date,
           title: title,
-          desc: a.summary || a.event_type || a.anomaly_type,
+          desc: a.summary || a.event_type,
           id: `ano-${a.id}`,
           Icon,
           iconColor,
@@ -291,7 +293,7 @@ export default function ChannelDetailPage() {
         <>
           <Card data-testid="channel-info-card">
             <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row gap-6">
+              <div className="flex flex-col sm:flex-row gap-4">
                 <div className="shrink-0 relative h-24 w-24">
                   <img 
                     src={channel.thumbnail_url || 'https://placehold.co/96x96'} 
@@ -395,13 +397,13 @@ export default function ChannelDetailPage() {
                     </Popover>
                   </div>
 
-                  <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-md flex justify-between items-start group">
+                   <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-md flex justify-between items-start group">
                     <div className="whitespace-pre-wrap flex-1">
-                      {(channel as any).notes || "（無備註）"}
+                      {channel.notes || "（無備註）"}
                     </div>
                     <Dialog open={notesDialogOpen} onOpenChange={(open) => {
                       setNotesDialogOpen(open);
-                      if (open) setNotesText((channel as any).notes || "");
+                      if (open) setNotesText(channel.notes || "");
                     }}>
                       <DialogTrigger asChild>
                         <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity h-6 px-2 text-xs">
@@ -440,7 +442,7 @@ export default function ChannelDetailPage() {
             </CardContent>
           </Card>
 
-          <div data-testid="channel-metrics-row" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div data-testid="channel-metrics-row" className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <SparklineCard
               title="訂閱數"
               value={formatNumber(latestSub)}
@@ -528,25 +530,31 @@ export default function ChannelDetailPage() {
                 </div>
               ) : (
                 <div className="h-[200px] w-full mt-4">
-                  <BResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyVideoData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.5} />
-                      <BXAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} style={{ fontSize: '12px', fill: 'hsl(var(--muted-foreground))' }} />
-                      <BYAxis tickLine={false} axisLine={false} width={40} style={{ fontSize: '12px', fill: 'hsl(var(--muted-foreground))' }} />
-                      <BTooltip 
-                        formatter={(val: any) => [val, "發布數"]}
-                        labelFormatter={(label) => `當週: ${label}`}
-                        cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
-                      />
-                      <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </BResponsiveContainer>
+                  {weeklyVideoData.length === 0 ? (
+                    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                      尚無趨勢數據，等待明日第一次快照
+                    </div>
+                  ) : (
+                    <BResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyVideoData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.5} />
+                        <BXAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} style={{ fontSize: '12px', fill: 'hsl(var(--muted-foreground))' }} />
+                        <BYAxis tickLine={false} axisLine={false} width={40} style={{ fontSize: '12px', fill: 'hsl(var(--muted-foreground))' }} />
+                         <BTooltip 
+                           formatter={(val) => val != null ? [val, "發布數"] : ["—", "發布數"]}
+                           labelFormatter={(label) => `當週: ${label}`}
+                           cursor={{ fill: 'hsl(var(--muted)/0.5)' }}
+                         />
+                        <Bar dataKey="value" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </BResponsiveContainer>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">頻道介紹</CardTitle>

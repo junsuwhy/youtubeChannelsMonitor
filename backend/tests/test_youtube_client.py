@@ -1,6 +1,5 @@
 import json
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from googleapiclient.errors import HttpError
 

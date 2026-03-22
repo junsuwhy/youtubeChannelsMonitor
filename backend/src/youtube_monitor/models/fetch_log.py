@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import String, Text, Integer, DateTime
+from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import mapped_column, Mapped
 from sqlalchemy import func
 from typing import Optional
@@ -11,6 +11,9 @@ class FetchLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_name: Mapped[str] = mapped_column(String(100), index=True, nullable=False)
+    channel_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("channels.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     channels_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     videos_processed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

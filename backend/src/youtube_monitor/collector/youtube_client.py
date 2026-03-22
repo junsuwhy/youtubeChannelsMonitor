@@ -1,6 +1,6 @@
 import asyncio
 import random
-from datetime import datetime, timezone
+from datetime import datetime
 from functools import partial
 from typing import Optional
 from googleapiclient.discovery import build

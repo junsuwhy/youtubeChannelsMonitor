@@ -1,10 +1,19 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, text
 from sqlalchemy.exc import IntegrityError
 from typing import Optional, List, Dict
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.channel_snapshot import ChannelSnapshot
 from youtube_monitor.schemas.channel import ChannelCreate, ChannelUpdate
+
+# Allowed sort fields that map to Channel columns directly
+_SORT_CHANNEL_COLS = {
+    "created_at": Channel.created_at,
+    "updated_at": Channel.updated_at,
+}
+
+# Allowed sort fields that require joining the latest ChannelSnapshot
+_SORT_SNAPSHOT_COLS = {"subscriber_count", "video_count", "view_count"}
 
 
 async def get_channel(db: AsyncSession, channel_id: int) -> Optional[Channel]:
@@ -15,6 +24,10 @@ async def get_channel(db: AsyncSession, channel_id: int) -> Optional[Channel]:
 async def get_channels(
     db: AsyncSession,
     status: Optional[str] = None,
+    source: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    search: Optional[str] = None,
+    sort_by: Optional[str] = None,
     page: int = 1,
     limit: int = 50,
 ) -> tuple[List[Channel], int]:
@@ -24,6 +37,69 @@ async def get_channels(
     if status:
         query = query.where(Channel.status == status)
         count_query = count_query.where(Channel.status == status)
+
+    if source:
+        query = query.where(Channel.source == source)
+        count_query = count_query.where(Channel.source == source)
+
+    if tags:
+        # Use json_each() — channel must have AT LEAST ONE of the specified tags (OR logic)
+        # Build an EXISTS subquery for each tag, then OR them together
+        tag_conditions = [
+            Channel.id.in_(
+                select(Channel.id).where(
+                    text(
+                        f"EXISTS (SELECT 1 FROM json_each(channels.tags)"
+                        f" WHERE json_each.value = :tag_{i})"
+                    ).bindparams(**{f"tag_{i}": tag})
+                )
+            )
+            for i, tag in enumerate(tags)
+        ]
+        tag_filter = or_(*tag_conditions)
+        query = query.where(tag_filter)
+        count_query = count_query.where(tag_filter)
+
+    if search:
+        search_filter = or_(
+            Channel.channel_name.ilike(f"%{search}%"),
+            Channel.youtube_channel_id.ilike(f"%{search}%"),
+            Channel.custom_url.ilike(f"%{search}%"),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
+
+    # Apply sort_by — snapshot-based sorts require a join with latest snapshot
+    if sort_by and sort_by in _SORT_SNAPSHOT_COLS:
+        latest_date_subq = (
+            select(
+                ChannelSnapshot.channel_id,
+                func.max(ChannelSnapshot.snapshot_date).label("max_date"),
+            )
+            .group_by(ChannelSnapshot.channel_id)
+            .subquery()
+        )
+        latest_snap_subq = (
+            select(
+                ChannelSnapshot.channel_id,
+                getattr(ChannelSnapshot, sort_by).label("sort_val"),
+            )
+            .join(
+                latest_date_subq,
+                (ChannelSnapshot.channel_id == latest_date_subq.c.channel_id)
+                & (ChannelSnapshot.snapshot_date == latest_date_subq.c.max_date),
+            )
+            .subquery()
+        )
+        query = query.outerjoin(
+            latest_snap_subq,
+            Channel.id == latest_snap_subq.c.channel_id,
+        ).order_by(latest_snap_subq.c.sort_val.desc().nulls_last())
+    elif sort_by and sort_by in _SORT_CHANNEL_COLS:
+        query = query.order_by(_SORT_CHANNEL_COLS[sort_by].desc())
+    else:
+        # Default sort: most recently updated first
+        query = query.order_by(Channel.updated_at.desc())
 
     # Total count
     total_result = await db.execute(count_query)

@@ -69,7 +69,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
 
   return (
     <div className="space-y-4" data-testid="channel-videos-tab">
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
         <Input 
           placeholder="搜尋影片標題..." 
           value={localTitle}
@@ -87,7 +87,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
             setPage(1);
           }}
         >
-          <SelectTrigger className="w-[130px]">
+          <SelectTrigger className="w-full sm:w-[130px]">
             <SelectValue placeholder="所有狀態" />
           </SelectTrigger>
           <SelectContent>
@@ -99,7 +99,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <Input 
             type="date"
             value={publishedAfter}
@@ -107,7 +107,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
               setPublishedAfter(e.target.value);
               setPage(1);
             }}
-            className="w-[140px]"
+            className="w-full sm:w-[140px]"
           />
           <span className="text-muted-foreground">-</span>
           <Input 
@@ -117,7 +117,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
               setPublishedBefore(e.target.value);
               setPage(1);
             }}
-            className="w-[140px]"
+            className="w-full sm:w-[140px]"
           />
         </div>
 
@@ -128,7 +128,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
             setPage(1);
           }}
         >
-          <SelectTrigger className="w-[150px]">
+          <SelectTrigger className="w-full sm:w-[150px]">
             <SelectValue placeholder="排序方式" />
           </SelectTrigger>
           <SelectContent>
@@ -152,7 +152,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
               setSortBy("");
               setPage(1);
             }} 
-            className="px-2"
+            className="w-full sm:w-auto px-2"
           >
             清除篩選
           </Button>
@@ -193,7 +193,7 @@ export function VideosTab({ channelId }: VideosTabProps) {
             ) : videos.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-32 text-center">
-                  <EmptyState message="找不到影片" />
+                  <EmptyState message="此頻道目前沒有影片" testId="empty-state-videos" />
                 </TableCell>
               </TableRow>
             ) : (

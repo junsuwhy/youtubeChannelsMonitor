@@ -6,6 +6,7 @@ from youtube_monitor.models.video_snapshot import VideoSnapshot
 from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.models.cofacts_source import CofactsSource
 from youtube_monitor.models.user import User
+from youtube_monitor.models.anomaly_event import AnomalyEvent
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "FetchLog",
     "CofactsSource",
     "User",
+    "AnomalyEvent",
 ]

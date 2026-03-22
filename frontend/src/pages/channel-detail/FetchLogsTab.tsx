@@ -73,7 +73,7 @@ export function FetchLogsTab({ channelId }: FetchLogsTabProps) {
     <div className="space-y-4" data-testid="channel-fetch-logs-tab">
       {error && <ErrorBanner message={error instanceof Error ? error.message : "載入失敗"} />}
 
-      <div className="rounded-md border bg-card">
+      <div className="rounded-md border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -102,7 +102,7 @@ export function FetchLogsTab({ channelId }: FetchLogsTabProps) {
             ) : logs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center">
-                  <EmptyState message="找不到爬取紀錄" />
+                  <EmptyState message="尚無爬取紀錄" testId="empty-state-fetch-logs" />
                 </TableCell>
               </TableRow>
             ) : (

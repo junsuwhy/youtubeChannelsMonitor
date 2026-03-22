@@ -1,6 +1,5 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 from sqlalchemy import select
 
 from youtube_monitor.models.channel import Channel

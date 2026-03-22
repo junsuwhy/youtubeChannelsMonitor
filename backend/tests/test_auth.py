@@ -1,6 +1,5 @@
 import pytest
 import httpx
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from youtube_monitor.auth.security import (
     get_password_hash,

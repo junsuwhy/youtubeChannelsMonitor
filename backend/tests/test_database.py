@@ -4,7 +4,7 @@ import pytest
 import tempfile
 import os
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool, NullPool
 from sqlalchemy import event
 

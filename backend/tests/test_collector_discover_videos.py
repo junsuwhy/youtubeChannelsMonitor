@@ -1,13 +1,10 @@
-import pytest
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import select
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.video import Video
-from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.collector.jobs.discover_videos import run_discover_videos_job
-from youtube_monitor.collector.youtube_client import QuotaExceededException
 
 
 KNOWN_DATE = date(2026, 3, 20)

@@ -115,6 +115,32 @@ async def run_channel_snapshot_job(
             await session.execute(stmt)
             channels_processed += 1
 
+            # Run anomaly detection for this channel (non-fatal)
+            try:
+                from youtube_monitor.services.anomaly_detector import AnomalyDetector
+                from youtube_monitor.crud.anomaly import create_anomaly_events
+                from sqlalchemy import select as _select
+                from youtube_monitor.models.channel_snapshot import (
+                    ChannelSnapshot as _CS,
+                )
+
+                snap_result = await session.execute(
+                    _select(_CS)
+                    .where(_CS.channel_id == channel.id)
+                    .order_by(_CS.snapshot_date.desc())
+                    .limit(30)
+                )
+                recent_snaps = list(snap_result.scalars().all())
+                if len(recent_snaps) >= 7:
+                    detector = AnomalyDetector()
+                    events = detector.detect_channel_anomalies(channel.id, recent_snaps)
+                    if events:
+                        await create_anomaly_events(session, events)
+            except Exception as _e:
+                logger.warning(
+                    "Anomaly detection failed for channel %s: %s", channel.id, _e
+                )
+
         # All channels processed successfully
         fetch_log = FetchLog(
             job_name="channel_snapshot",

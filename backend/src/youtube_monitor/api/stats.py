@@ -3,12 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from youtube_monitor.database import get_session
-from youtube_monitor.models.user import User
 from youtube_monitor.crud import video as video_crud
 from youtube_monitor.schemas.video import (
     StatsOverviewResponse,
     ChannelTrendPoint,
-    VideoResponse,
 )
 
 try:

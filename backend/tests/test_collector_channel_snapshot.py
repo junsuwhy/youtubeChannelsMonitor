@@ -1,7 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date
-from sqlalchemy import select, func
+from sqlalchemy import select
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.channel_snapshot import ChannelSnapshot

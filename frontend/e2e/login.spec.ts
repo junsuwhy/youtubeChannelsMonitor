@@ -9,12 +9,15 @@ test.describe("Login Page", () => {
   });
 
   test("shows error message on wrong credentials", async ({ page }) => {
+    await page.route("**/api/auth/login*", route =>
+      route.fulfill({ status: 400, json: { detail: "Incorrect username or password" } })
+    );
     await page.goto("/login");
     await page.getByLabel("username").fill("wronguser");
     await page.getByLabel("password").fill("wrongpassword");
     await page.getByRole("button", { name: "登入" }).click();
     // Error message should appear
-    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByRole("alert")).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole("alert")).toContainText("帳號或密碼錯誤");
   });
 

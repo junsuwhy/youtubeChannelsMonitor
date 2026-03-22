@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
-from datetime import date, datetime, timezone
+from sqlalchemy import select, func
+from datetime import datetime
 from typing import Optional
 
 from youtube_monitor.database import get_session
 from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.schemas.system import (
     QuotaResponse,
-    FetchLogResponse,
     FetchLogListResponse,
     TriggerResponse,
 )
@@ -70,6 +69,7 @@ async def get_logs(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     job_type: Optional[str] = Query(default=None),
+    channel_id: int | None = Query(default=None),
     db: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
@@ -79,6 +79,10 @@ async def get_logs(
     if job_type:
         query = query.where(FetchLog.job_name == job_type)
         count_query = count_query.where(FetchLog.job_name == job_type)
+
+    if channel_id is not None:
+        query = query.where(FetchLog.channel_id == channel_id)
+        count_query = count_query.where(FetchLog.channel_id == channel_id)
 
     total = await db.scalar(count_query)
     offset = (page - 1) * limit

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any, Dict
 from youtube_monitor.models.video import Video
 from youtube_monitor.models.video_snapshot import VideoSnapshot
@@ -17,12 +17,28 @@ async def get_videos(
     channel_id: Optional[int] = None,
     page: int = 1,
     limit: int = 50,
+    title: Optional[str] = None,
+    status: Optional[str] = None,
+    include_non_public: bool = False,
+    published_after: Optional[date] = None,
+    published_before: Optional[date] = None,
+    sort_by: Optional[str] = None,
 ) -> tuple[List[Dict[str, Any]], int]:
-    count_query = (
-        select(func.count()).select_from(Video).where(Video.status == "public")
-    )
+    count_query = select(func.count()).select_from(Video)
+
+    if not include_non_public:
+        count_query = count_query.where(Video.status == "public")
+    elif status:
+        count_query = count_query.where(Video.status == status)
+
     if channel_id:
         count_query = count_query.where(Video.channel_id == channel_id)
+    if title:
+        count_query = count_query.where(Video.title.ilike(f"%{title}%"))
+    if published_after:
+        count_query = count_query.where(Video.published_at >= published_after)
+    if published_before:
+        count_query = count_query.where(Video.published_at <= published_before)
 
     total_result = await db.execute(count_query)
     total = total_result.scalar()
@@ -35,6 +51,14 @@ async def get_videos(
         .group_by(VideoSnapshot.video_id)
         .subquery()
     )
+
+    sort_map = {
+        "view_count": desc(VideoSnapshot.view_count),
+        "like_count": desc(VideoSnapshot.like_count),
+        "comment_count": desc(VideoSnapshot.comment_count),
+        "created_at": desc(Video.created_at),
+        "published_at": desc(Video.published_at),
+    }
 
     offset = (page - 1) * limit
     query = (
@@ -55,13 +79,28 @@ async def get_videos(
             (VideoSnapshot.video_id == Video.id)
             & (VideoSnapshot.snapshot_date == latest_snap_date_sq.c.max_date),
         )
-        .where(Video.status == "public")
-        .order_by(desc(Video.published_at))
-        .offset(offset)
-        .limit(limit)
     )
+
+    if not include_non_public:
+        query = query.where(Video.status == "public")
+    elif status:
+        query = query.where(Video.status == status)
+
     if channel_id:
         query = query.where(Video.channel_id == channel_id)
+    if title:
+        query = query.where(Video.title.ilike(f"%{title}%"))
+    if published_after:
+        query = query.where(Video.published_at >= published_after)
+    if published_before:
+        query = query.where(Video.published_at <= published_before)
+
+    if sort_by and sort_by in sort_map:
+        query = query.order_by(sort_map[sort_by])
+    else:
+        query = query.order_by(desc(Video.published_at))
+
+    query = query.offset(offset).limit(limit)
 
     result = await db.execute(query)
     rows = result.all()

@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
 
-from youtube_monitor.models import Base, Channel, ChannelSnapshot
+from youtube_monitor.models import Base, Channel
 from youtube_monitor.models.base import Base as BaseClass
 from sqlalchemy.ext.asyncio import AsyncAttrs
 
