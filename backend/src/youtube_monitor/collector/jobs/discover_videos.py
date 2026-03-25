@@ -224,3 +224,19 @@ async def run_discover_videos_job(
             "api_units_used": api_units_used,
             "error": str(e),
         }
+
+    except Exception as e:
+        logger.error("Unexpected error during discover_videos job: %s", e)
+        fetch_log = FetchLog(
+            job_name="discover_videos",
+            status="failed",
+            channels_processed=0,
+            videos_processed=total_videos_processed,
+            api_units_used=api_units_used,
+            error_message=str(e),
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc),
+        )
+        session.add(fetch_log)
+        await session.commit()
+        raise

@@ -215,3 +215,19 @@ async def run_video_snapshot_job(
             "api_units_used": api_units_used,
             "error": str(e),
         }
+
+    except Exception as e:
+        logger.error("Unexpected error during video_snapshot job: %s", e)
+        fetch_log = FetchLog(
+            job_name="video_snapshot",
+            status="failed",
+            channels_processed=0,
+            videos_processed=videos_processed,
+            api_units_used=api_units_used,
+            error_message=str(e),
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc),
+        )
+        session.add(fetch_log)
+        await session.commit()
+        raise
