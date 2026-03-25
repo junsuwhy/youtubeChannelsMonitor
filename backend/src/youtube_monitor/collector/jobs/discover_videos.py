@@ -6,6 +6,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.video import Video
+from youtube_monitor.models.video_snapshot import VideoSnapshot
 from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.collector.youtube_client import (
     YouTubeClient,
@@ -81,12 +82,14 @@ async def run_discover_videos_job(
                     )
                     continue
 
-                # Persist uploads_playlist_id on the channel
+                # Persist uploads_playlist_id immediately so it survives
+                # even if the later video-discovery steps fail
                 await session.execute(
                     update(Channel)
                     .where(Channel.id == channel.id)
                     .values(uploads_playlist_id=playlist_id)
                 )
+                await session.commit()
 
             # Step 2: Fetch video IDs from playlist (up to 200, max_pages=4)
             video_ids = await youtube_client.get_uploads_playlist_items(
@@ -119,11 +122,12 @@ async def run_discover_videos_job(
             video_details = await youtube_client.get_video_details(new_video_ids)
             api_units_used += max(1, (len(new_video_ids) + 49) // 50)
 
-            # Step 6: Upsert new videos
+            # Step 6: Upsert new videos and create initial VideoSnapshot
             rapid_until = today + timedelta(days=7)
             for video_data in video_details:
+                yt_video_id = video_data["youtube_video_id"]
                 stmt = sqlite_insert(Video).values(
-                    youtube_video_id=video_data["youtube_video_id"],
+                    youtube_video_id=yt_video_id,
                     channel_id=channel.id,
                     title=video_data.get("title"),
                     description=video_data.get("description"),
@@ -148,6 +152,28 @@ async def run_discover_videos_job(
                     },
                 )
                 await session.execute(stmt)
+
+                video_result = await session.execute(
+                    select(Video.id).where(Video.youtube_video_id == yt_video_id)
+                )
+                video_db_id = video_result.scalar_one()
+
+                snap_stmt = sqlite_insert(VideoSnapshot).values(
+                    video_id=video_db_id,
+                    snapshot_date=today,
+                    view_count=video_data.get("view_count"),
+                    like_count=video_data.get("like_count"),
+                    comment_count=video_data.get("comment_count"),
+                )
+                snap_stmt = snap_stmt.on_conflict_do_update(
+                    index_elements=["video_id", "snapshot_date"],
+                    set_={
+                        "view_count": snap_stmt.excluded.view_count,
+                        "like_count": snap_stmt.excluded.like_count,
+                        "comment_count": snap_stmt.excluded.comment_count,
+                    },
+                )
+                await session.execute(snap_stmt)
 
             total_videos_processed += len(video_details)
             logger.info(

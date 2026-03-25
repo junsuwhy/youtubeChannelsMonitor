@@ -34,7 +34,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SourceBadge } from "@/components/SourceBadge";
 import { SparklineCard } from "@/components/SparklineCard";
 import { TrendChart } from "@/components/TrendChart";
-import { formatDate, formatRelativeTime, formatChange } from "@/lib/formatters";
+import { formatDate, formatDateTime, formatRelativeTime, formatChange } from "@/lib/formatters";
 
 type MetricType = "subscriber" | "view" | "video";
 type TimeRangeType = "7D" | "30D" | "90D" | "1Y" | "ALL";
@@ -49,6 +49,7 @@ export default function ChannelDetailPage() {
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [notesText, setNotesText] = useState("");
   const [isFetchingNow, setIsFetchingNow] = useState(false);
+  const [fetchNowError, setFetchNowError] = useState<string | null>(null);
 
   // Overview tab state
   const [activeTab, setActiveTab] = useState("overview");
@@ -121,9 +122,11 @@ export default function ChannelDetailPage() {
 
   const handleFetchNow = async () => {
     setIsFetchingNow(true);
+    setFetchNowError(null);
     try {
       await fetchChannelNow(channelId);
     } catch (e) {
+      setFetchNowError(e instanceof Error ? e.message : "爬取失敗，請稍後再試");
     } finally {
       setIsFetchingNow(false);
     }
@@ -275,6 +278,7 @@ export default function ChannelDetailPage() {
   return (
     <div className="space-y-6 p-6">
       {error && <ErrorBanner message={error instanceof Error ? error.message : "載入失敗"} />}
+      {fetchNowError && <ErrorBanner message={`立即爬取失敗：${fetchNowError}`} />}
 
       {channelLoading ? (
         <Card>
@@ -320,7 +324,7 @@ export default function ChannelDetailPage() {
                         <p className="text-sm text-muted-foreground">@{channel.custom_url}</p>
                       )}
                       <p className="text-sm text-muted-foreground">
-                        頻道建立於 {formatDate(channel.created_at || "")} ・ 國家: {channel.country || '未提供'}
+                        頻道建立於 {formatDateTime(channel.created_at || "")} ・ 國家: {channel.country || '未提供'}
                       </p>
                       <div>
                         <a 
@@ -433,7 +437,7 @@ export default function ChannelDetailPage() {
                   <Separator />
 
                   <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted-foreground">
-                    <div>首次收錄: {formatDate(channel.created_at || "")}</div>
+                    <div>首次收錄: {formatDateTime(channel.created_at || "")}</div>
                     <div>最後爬取: {formatRelativeTime(channel.updated_at || "")}</div>
                     <div>爬取頻率: 每日</div>
                   </div>
