@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { fetchStatsOverview, fetchSystemQuota, fetchNewVideos } from "@/lib/api";
+import { fetchStatsOverview, fetchSystemQuota, fetchTrendingVideos, fetchTrendingChannels } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { NumberFormatter } from "@/components/NumberFormatter";
-import { formatDate } from "@/lib/formatters";
 
 function KPISkeleton() {
   return (
@@ -38,16 +37,23 @@ export default function DashboardPage() {
     gcTime: 5 * 60 * 1000,
   });
 
-  const { data: newVideosData, isLoading: videosLoading, error: videosError } = useQuery({
-    queryKey: ['new-videos'],
-    queryFn: () => fetchNewVideos(10),
+  const { data: trendingVideosData, isLoading: trendingVideosLoading, error: trendingVideosError } = useQuery({
+    queryKey: ['trending-videos'],
+    queryFn: () => fetchTrendingVideos(10),
     gcTime: 5 * 60 * 1000,
   });
 
-  const newVideos = Array.isArray(newVideosData) ? newVideosData : newVideosData?.items || [];
+  const { data: trendingChannelsData, isLoading: trendingChannelsLoading, error: trendingChannelsError } = useQuery({
+    queryKey: ['trending-channels'],
+    queryFn: () => fetchTrendingChannels(10),
+    gcTime: 5 * 60 * 1000,
+  });
 
-  const hasError = statsError || quotaError || videosError;
-  const errorObj = statsError || quotaError || videosError;
+  const trendingVideos = trendingVideosData?.items ?? [];
+  const trendingChannels = trendingChannelsData?.items ?? [];
+
+  const hasError = statsError || quotaError || trendingVideosError || trendingChannelsError;
+  const errorObj = statsError || quotaError || trendingVideosError || trendingChannelsError;
   const errorMsg = errorObj instanceof Error ? errorObj.message : "載入失敗";
 
   return (
@@ -113,74 +119,138 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight mb-4">最新影片</h2>
-        <Card>
-          <div className="overflow-x-auto">
-            <Table data-testid="new-videos-table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[100px]">縮圖</TableHead>
-                  <TableHead>標題</TableHead>
-                  <TableHead>頻道</TableHead>
-                  <TableHead>發布時間</TableHead>
-                  <TableHead className="text-right">觀看數</TableHead>
-                  <TableHead className="text-right">喜歡數</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {videosLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-[50px] w-[90px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[250px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : newVideos.length === 0 ? (
+      {/* ── Trending Leaderboards ── */}
+      <div className="grid gap-6 lg:grid-cols-3">
+
+        {/* Left panel: Top videos by 24hr view delta (2/3 width) */}
+        <div className="lg:col-span-2 space-y-2">
+          <h2 className="text-xl font-semibold tracking-tight">24hr 觀看增量 Top 影片</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <Table data-testid="trending-videos-table">
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                      無最新影片
-                    </TableCell>
+                    <TableHead className="w-[100px]">縮圖</TableHead>
+                    <TableHead>標題</TableHead>
+                    <TableHead>頻道</TableHead>
+                    <TableHead className="text-right">增量</TableHead>
+                    <TableHead className="text-right">目前觀看數</TableHead>
                   </TableRow>
-                ) : (
-                  newVideos.map((video: any) => (
-                    <TableRow key={video.id}>
-                      <TableCell>
-                        <img 
-                          src={video.thumbnail_url || 'https://placehold.co/90x50'} 
-                          alt={video.title} 
-                          className="aspect-video w-[90px] object-cover rounded"
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium max-w-[300px] truncate">
-                        <Link
-                          to={`/videos/${video.id}`}
-                          className="hover:text-primary hover:underline transition-colors"
-                        >
-                          {video.title}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{video.channel_name || 'Unknown'}</TableCell>
-                      <TableCell>
-                        {formatDate(video.published_at || "")}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <NumberFormatter value={video.view_count || 0} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <NumberFormatter value={video.like_count || 0} />
+                </TableHeader>
+                <TableBody>
+                  {trendingVideosLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-[50px] w-[90px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[250px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : trendingVideos.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                        尚無 24 小時快照增量資料
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </Card>
+                  ) : (
+                    trendingVideos.map((video) => (
+                      <TableRow key={video.id}>
+                        <TableCell>
+                          <img
+                            src={video.thumbnail_url || 'https://placehold.co/90x50'}
+                            alt={video.title ?? ''}
+                            className="aspect-video w-[90px] object-cover rounded"
+                          />
+                        </TableCell>
+                        <TableCell className="font-medium max-w-[300px] truncate">
+                          <Link
+                            to={`/videos/${video.id}`}
+                            className="hover:text-primary hover:underline transition-colors"
+                          >
+                            {video.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <Link
+                            to={`/channels/${video.channel_id}`}
+                            className="hover:text-primary hover:underline transition-colors"
+                          >
+                            {video.channel_name || 'Unknown'}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-green-600">
+                          {video.view_delta != null && video.view_delta >= 0 ? '+' : ''}
+                          <NumberFormatter value={video.view_delta ?? 0} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <NumberFormatter value={video.view_count ?? 0} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </div>
+
+        {/* Right panel: Top channels by 24hr view delta (1/3 width) */}
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold tracking-tight">24hr 觀看增量 Top 頻道</h2>
+          <Card>
+            <div className="overflow-x-auto">
+              <Table data-testid="trending-channels-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>頻道</TableHead>
+                    <TableHead className="text-right">增量</TableHead>
+                    <TableHead className="text-right">總觀看數</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {trendingChannelsLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><Skeleton className="h-4 w-[120px]" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                        <TableCell><Skeleton className="h-4 w-[60px] ml-auto" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : trendingChannels.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-center py-6 text-muted-foreground">
+                        尚無 24 小時快照增量資料
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    trendingChannels.map((channel) => (
+                      <TableRow key={channel.id}>
+                        <TableCell className="font-medium">
+                          <Link
+                            to={`/channels/${channel.id}`}
+                            className="hover:text-primary hover:underline transition-colors"
+                          >
+                            {channel.channel_name || 'Unknown'}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-right font-semibold text-green-600">
+                          {channel.view_delta != null && channel.view_delta >= 0 ? '+' : ''}
+                          <NumberFormatter value={channel.view_delta ?? 0} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <NumberFormatter value={channel.view_count ?? 0} />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </div>
+
       </div>
     </div>
   );
