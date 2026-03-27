@@ -7,6 +7,10 @@ from youtube_monitor.crud import video as video_crud
 from youtube_monitor.schemas.video import (
     StatsOverviewResponse,
     ChannelTrendPoint,
+    VideoTrendingItem,
+    TrendingVideosResponse,
+    ChannelTrendingItem,
+    TrendingChannelsResponse,
 )
 
 try:
@@ -89,3 +93,23 @@ async def new_videos(
             for v in videos
         ]
     }
+
+
+@router.get("/stats/videos/trending", response_model=TrendingVideosResponse)
+async def trending_videos(
+    limit: int = Query(default=10, ge=1, le=50),
+    db: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    videos = await video_crud.get_trending_videos(db, limit=limit)
+    return TrendingVideosResponse(items=[VideoTrendingItem(**v) for v in videos])
+
+
+@router.get("/stats/channels/trending", response_model=TrendingChannelsResponse)
+async def trending_channels(
+    limit: int = Query(default=10, ge=1, le=50),
+    db: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    channels = await video_crud.get_trending_channels(db, limit=limit)
+    return TrendingChannelsResponse(items=[ChannelTrendingItem(**c) for c in channels])

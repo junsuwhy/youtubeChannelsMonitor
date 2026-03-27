@@ -74,3 +74,31 @@ class VideoTopItem(BaseModel):
     view_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+
+class VideoTrendingItem(BaseModel):
+    id: int
+    youtube_video_id: str
+    channel_id: int
+    title: Optional[str] = None
+    channel_name: Optional[str] = None
+    view_count: Optional[int] = None
+    view_delta: Optional[int] = None
+    thumbnail_url: Optional[str] = None
+
+
+class TrendingVideosResponse(BaseModel):
+    items: List[VideoTrendingItem]
+
+
+class ChannelTrendingItem(BaseModel):
+    id: int
+    youtube_channel_id: str
+    channel_name: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    view_count: Optional[int] = None
+    view_delta: Optional[int] = None
+
+
+class TrendingChannelsResponse(BaseModel):
+    items: List[ChannelTrendingItem]
