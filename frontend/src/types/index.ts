@@ -196,6 +196,38 @@ export interface AnomalyListResponse {
 }
 
 // ============================================================================
+// Trending / Delta Types
+// ============================================================================
+
+export interface VideoTrendingItem {
+  id: number;
+  youtube_video_id: string;
+  channel_id: number;
+  title: string | null;
+  channel_name: string | null;
+  view_count: number | null;
+  view_delta: number | null;
+  thumbnail_url: string | null;
+}
+
+export interface TrendingVideosResponse {
+  items: VideoTrendingItem[];
+}
+
+export interface ChannelTrendingItem {
+  id: number;
+  youtube_channel_id: string;
+  channel_name: string | null;
+  thumbnail_url: string | null;
+  view_count: number | null;
+  view_delta: number | null;
+}
+
+export interface TrendingChannelsResponse {
+  items: ChannelTrendingItem[];
+}
+
+// ============================================================================
 // System Types
 // ============================================================================
 

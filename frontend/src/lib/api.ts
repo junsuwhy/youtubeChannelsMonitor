@@ -4,6 +4,7 @@ import type {
   Video, VideoListResponse, VideoSnapshot,
   AnomalyListResponse,
   FetchLogListResponse, StatsOverview, QuotaResponse,
+  TrendingVideosResponse, TrendingChannelsResponse,
 } from "@/types/index";
 
 const api = axios.create({ baseURL: "/api" });
@@ -160,6 +161,16 @@ export async function fetchChannelTags(): Promise<string[]> {
 
 export async function fetchVideo(id: number): Promise<Video> {
   const res = await api.get(`/videos/${id}`);
+  return res.data;
+}
+
+export async function fetchTrendingVideos(limit?: number): Promise<TrendingVideosResponse> {
+  const res = await api.get("/stats/videos/trending", { params: { limit } });
+  return res.data;
+}
+
+export async function fetchTrendingChannels(limit?: number): Promise<TrendingChannelsResponse> {
+  const res = await api.get("/stats/channels/trending", { params: { limit } });
   return res.data;
 }
 
