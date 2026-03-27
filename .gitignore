@@ -10,3 +10,4 @@ dist
 .sisyphus/boulder.json
 .sisyphus/evidence
 nohup.out
+.*

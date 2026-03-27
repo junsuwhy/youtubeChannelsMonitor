@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { fetchStatsOverview, fetchSystemQuota, fetchNewVideos } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { NumberFormatter } from "@/components/NumberFormatter";
+import { formatDate } from "@/lib/formatters";
 
 function KPISkeleton() {
   return (
@@ -155,11 +157,16 @@ export default function DashboardPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium max-w-[300px] truncate">
-                        {video.title}
+                        <Link
+                          to={`/videos/${video.id}`}
+                          className="hover:text-primary hover:underline transition-colors"
+                        >
+                          {video.title}
+                        </Link>
                       </TableCell>
-                      <TableCell>{video.channel?.channel_name || 'Unknown'}</TableCell>
+                      <TableCell>{video.channel_name || 'Unknown'}</TableCell>
                       <TableCell>
-                        {new Date(video.published_at).toLocaleDateString()}
+                        {formatDate(video.published_at || "")}
                       </TableCell>
                       <TableCell className="text-right">
                         <NumberFormatter value={video.view_count || 0} />

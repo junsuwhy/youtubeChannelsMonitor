@@ -18,7 +18,8 @@ import { useVideos } from "@/hooks/useVideos";
 import { useChannels } from "@/hooks/useChannels";
 import { formatNumber, formatDuration, formatRelativeTime } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
-import { Lock, MoreHorizontal, Check, ChevronsUpDown, ArrowDown } from "lucide-react";
+import { Lock, MoreHorizontal, Check, ChevronsUpDown, ArrowDown, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Video } from "@/types";
 
 export default function VideoListPage() {
@@ -135,6 +136,16 @@ export default function VideoListPage() {
         <Card className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => updateParam("status", "deleted")}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">已消失</CardTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>已刪除（{statsDeleted?.total ?? 0}）＋私人（{statsPrivate?.total ?? 0}）影片合計</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{(statsDeleted?.total ?? 0) + (statsPrivate?.total ?? 0)}</div>

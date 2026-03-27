@@ -201,11 +201,52 @@ async def get_top_videos(
     return [row[0] for row in rows]
 
 
-async def get_new_videos(db: AsyncSession, limit: int = 20) -> List[Video]:
+async def get_new_videos(db: AsyncSession, limit: int = 20) -> List[Dict[str, Any]]:
+    latest_snap_date_sq = (
+        select(
+            VideoSnapshot.video_id,
+            func.max(VideoSnapshot.snapshot_date).label("max_date"),
+        )
+        .group_by(VideoSnapshot.video_id)
+        .subquery()
+    )
+
     result = await db.execute(
-        select(Video)
+        select(
+            Video,
+            Channel.channel_name,
+            VideoSnapshot.view_count,
+            VideoSnapshot.like_count,
+            VideoSnapshot.comment_count,
+        )
+        .join(Channel, Video.channel_id == Channel.id)
+        .outerjoin(latest_snap_date_sq, Video.id == latest_snap_date_sq.c.video_id)
+        .outerjoin(
+            VideoSnapshot,
+            (VideoSnapshot.video_id == Video.id)
+            & (VideoSnapshot.snapshot_date == latest_snap_date_sq.c.max_date),
+        )
         .where(Video.status == "public")
         .order_by(desc(Video.created_at))
         .limit(limit)
     )
-    return list(result.scalars().all())
+
+    enriched = []
+    for row in result.all():
+        video, channel_name, view_count, like_count, comment_count = row
+        enriched.append(
+            {
+                "id": video.id,
+                "youtube_video_id": video.youtube_video_id,
+                "channel_id": video.channel_id,
+                "channel_name": channel_name,
+                "title": video.title,
+                "published_at": video.published_at,
+                "created_at": video.created_at,
+                "thumbnail_url": _derive_thumbnail_url(video.youtube_video_id),
+                "view_count": view_count,
+                "like_count": like_count,
+                "comment_count": comment_count,
+            }
+        )
+    return enriched

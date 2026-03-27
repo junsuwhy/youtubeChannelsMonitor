@@ -121,6 +121,23 @@ export function formatDate(dateStr: string): string {
 }
 
 /**
+ * Format date as "YYYY-MM-DD HH:mm:ss"
+ * Handle empty/null by returning "—"
+ */
+export function formatDateTime(dateStr: string): string {
+  if (!dateStr || dateStr.trim() === "") {
+    return "—";
+  }
+
+  try {
+    const parsedDate = parseISO(dateStr);
+    return format(parsedDate, "yyyy-MM-dd HH:mm:ss");
+  } catch {
+    return "—";
+  }
+}
+
+/**
  * Parse ISO 8601 duration (e.g. "PT1H23M45S", "PT5M30S", "PT45S")
  * Output: "HH:MM:SS" format with hours if present, "MM:SS" if < 1 hour
  * Pad minutes/seconds to 2 digits

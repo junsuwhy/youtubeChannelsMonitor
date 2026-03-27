@@ -24,10 +24,18 @@ class YouTubeClient:
 
     async def _with_backoff(self, coro_func, max_retries: int = 3):
         """Retry with exponential backoff for transient errors (429, 500, 503).
+        Also retries BrokenPipeError / ConnectionResetError — stale keep-alive
+        connections in the httplib2 pool cause these; the pool reopens on retry.
         NEVER retry 403 quotaExceeded — raise QuotaExceededException immediately."""
         for attempt in range(max_retries + 1):
             try:
                 return await coro_func()
+            except (BrokenPipeError, ConnectionResetError):
+                if attempt < max_retries:
+                    wait = (2**attempt) + random.uniform(0, 1)
+                    await asyncio.sleep(wait)
+                    continue
+                raise
             except HttpError as e:
                 status = int(e.resp.status)
                 content_str = (

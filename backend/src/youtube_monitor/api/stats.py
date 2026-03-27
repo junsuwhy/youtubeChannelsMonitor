@@ -74,10 +74,17 @@ async def new_videos(
     return {
         "items": [
             {
-                "id": v.id,
-                "youtube_video_id": v.youtube_video_id,
-                "title": v.title,
-                "created_at": str(v.created_at),
+                "id": v["id"],
+                "youtube_video_id": v["youtube_video_id"],
+                "channel_id": v["channel_id"],
+                "channel_name": v["channel_name"],
+                "title": v["title"],
+                "published_at": str(v["published_at"]) if v["published_at"] else None,
+                "created_at": str(v["created_at"]),
+                "thumbnail_url": v["thumbnail_url"],
+                "view_count": v["view_count"],
+                "like_count": v["like_count"],
+                "comment_count": v["comment_count"],
             }
             for v in videos
         ]

@@ -12,6 +12,9 @@ from youtube_monitor.collector.jobs.video_snapshot import run_video_snapshot_job
 logger = logging.getLogger(__name__)
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
+# Populated by create_scheduler() so trigger_all_jobs() can reach them.
+_trigger_state: dict = {}
+
 
 async def run_wal_checkpoint(session_factory):
     """Run SQLite WAL checkpoint to prevent unbounded WAL file growth."""
@@ -38,8 +41,20 @@ async def _video_snapshot_wrapper(session_factory, youtube_client):
         await run_video_snapshot_job(session, youtube_client)
 
 
+async def trigger_all_jobs():
+    """Immediately run all collector jobs sequentially (channel → discover → video).
+    Called by the /system/fetch/trigger API endpoint after quota check."""
+    session_factory = _trigger_state["session_factory"]
+    youtube_client = _trigger_state["youtube_client"]
+    await _channel_snapshot_wrapper(session_factory, youtube_client)
+    await _discover_videos_wrapper(session_factory, youtube_client)
+    await _video_snapshot_wrapper(session_factory, youtube_client)
+
+
 def create_scheduler(session_factory, youtube_client) -> AsyncIOScheduler:
     """Create and configure the APScheduler AsyncIOScheduler."""
+    _trigger_state["session_factory"] = session_factory
+    _trigger_state["youtube_client"] = youtube_client
     scheduler = AsyncIOScheduler(timezone=TAIPEI_TZ)
 
     # Channel snapshot: daily at 04:00 Taipei

@@ -37,6 +37,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { EmptyState } from "@/components/EmptyState";
 import {
   formatDate,
+  formatDateTime,
   formatDuration,
   formatNumber,
   formatChange,
@@ -189,7 +190,7 @@ export default function VideoDetailPage() {
         <div data-testid="video-warning-banner" className="bg-amber-50 border border-amber-200 rounded-md p-4 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 text-amber-500" />
           <span className="text-amber-800 text-sm">
-            ⚠️ 此影片已於 {formatDate(video.updated_at || video.created_at || "")} 變為{video.status === "deleted" ? "刪除" : "私人"}，以下數據為最後一次成功爬取的記錄
+            ⚠️ 此影片已於 {formatDateTime(video.updated_at || video.created_at || "")} 變為{video.status === "deleted" ? "刪除" : "私人"}，以下數據為最後一次成功爬取的記錄
           </span>
         </div>
       )}
@@ -246,7 +247,7 @@ export default function VideoDetailPage() {
             <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-foreground">發布時間:</span>
-                <span>{formatDate(video.published_at || "")}</span>
+                <span>{formatDateTime(video.published_at || "")}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="font-medium text-foreground">時長:</span>

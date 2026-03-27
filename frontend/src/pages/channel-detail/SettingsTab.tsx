@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -24,8 +24,12 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
   const updateChannelMutation = useUpdateChannel();
   
   const [newTag, setNewTag] = useState("");
-  const [localNotes, setLocalNotes] = useState("");
+  const [localNotes, setLocalNotes] = useState(channel?.notes ?? "");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    setLocalNotes(channel?.notes ?? "");
+  }, [channel?.notes]);
 
   if (!channel) return null;
 
@@ -59,8 +63,10 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
   };
 
   const handleSaveNotes = () => {
-    // Notes field is not yet supported by the backend
-    alert("功能即將推出");
+    updateChannelMutation.mutate({
+      id: channelId,
+      data: { notes: localNotes }
+    });
   };
 
   const handleDeleteChannel = async () => {
@@ -178,9 +184,10 @@ export function SettingsTab({ channelId }: SettingsTabProps) {
             <div className="flex justify-end pt-2">
               <Button 
                 onClick={handleSaveNotes} 
+                disabled={updateChannelMutation.isPending}
                 data-testid="settings-save-notes"
               >
-                儲存備註
+                {updateChannelMutation.isPending ? "儲存中..." : "儲存備註"}
               </Button>
             </div>
           </div>

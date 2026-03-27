@@ -196,7 +196,14 @@ export default function ChannelListPage() {
     setUrlInput(value);
     setResolveError("");
 
-    const looksLikeUrl = value.includes("youtube.com") || value.includes("youtu.be");
+    let decoded = value;
+    try {
+      decoded = decodeURIComponent(value);
+    } catch {
+      decoded = value;
+    }
+
+    const looksLikeUrl = decoded.includes("youtube.com") || decoded.includes("youtu.be");
     if (!looksLikeUrl) {
       setNewChannelId(value);
       return;
