@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, alias
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any, Dict
 from youtube_monitor.models.video import Video
@@ -250,3 +250,143 @@ async def get_new_videos(db: AsyncSession, limit: int = 20) -> List[Dict[str, An
             }
         )
     return enriched
+
+
+async def get_trending_videos(
+    db: AsyncSession, limit: int = 10
+) -> List[Dict[str, Any]]:
+    latest_sq = (
+        select(
+            VideoSnapshot.video_id.label("video_id"),
+            func.max(VideoSnapshot.snapshot_date).label("latest_date"),
+        )
+        .group_by(VideoSnapshot.video_id)
+        .subquery()
+    )
+
+    snap_today = alias(VideoSnapshot.__table__, name="snap_today")
+    snap_prev = alias(VideoSnapshot.__table__, name="snap_prev")
+
+    prev_sq = (
+        select(
+            VideoSnapshot.video_id.label("video_id"),
+            func.max(VideoSnapshot.snapshot_date).label("prev_date"),
+        )
+        .join(latest_sq, VideoSnapshot.video_id == latest_sq.c.video_id)
+        .where(VideoSnapshot.snapshot_date < latest_sq.c.latest_date)
+        .group_by(VideoSnapshot.video_id)
+        .subquery()
+    )
+
+    query = (
+        select(
+            Video.id,
+            Video.youtube_video_id,
+            Video.channel_id,
+            Video.title,
+            Channel.channel_name,
+            snap_today.c.view_count.label("view_count"),
+            (snap_today.c.view_count - snap_prev.c.view_count).label("view_delta"),
+        )
+        .join(Channel, Video.channel_id == Channel.id)
+        .join(latest_sq, Video.id == latest_sq.c.video_id)
+        .join(
+            snap_today,
+            (snap_today.c.video_id == Video.id)
+            & (snap_today.c.snapshot_date == latest_sq.c.latest_date),
+        )
+        .join(prev_sq, Video.id == prev_sq.c.video_id)
+        .join(
+            snap_prev,
+            (snap_prev.c.video_id == Video.id)
+            & (snap_prev.c.snapshot_date == prev_sq.c.prev_date),
+        )
+        .where(Video.status == "public")
+        .order_by(desc(snap_today.c.view_count - snap_prev.c.view_count))
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "id": row.id,
+            "youtube_video_id": row.youtube_video_id,
+            "channel_id": row.channel_id,
+            "title": row.title,
+            "channel_name": row.channel_name,
+            "view_count": row.view_count,
+            "view_delta": row.view_delta,
+            "thumbnail_url": _derive_thumbnail_url(row.youtube_video_id),
+        }
+        for row in rows
+    ]
+
+
+async def get_trending_channels(
+    db: AsyncSession, limit: int = 10
+) -> List[Dict[str, Any]]:
+    latest_sq = (
+        select(
+            ChannelSnapshot.channel_id.label("channel_id"),
+            func.max(ChannelSnapshot.snapshot_date).label("latest_date"),
+        )
+        .group_by(ChannelSnapshot.channel_id)
+        .subquery()
+    )
+
+    prev_sq = (
+        select(
+            ChannelSnapshot.channel_id.label("channel_id"),
+            func.max(ChannelSnapshot.snapshot_date).label("prev_date"),
+        )
+        .join(latest_sq, ChannelSnapshot.channel_id == latest_sq.c.channel_id)
+        .where(ChannelSnapshot.snapshot_date < latest_sq.c.latest_date)
+        .group_by(ChannelSnapshot.channel_id)
+        .subquery()
+    )
+
+    snap_today = alias(ChannelSnapshot.__table__, name="chan_snap_today")
+    snap_prev = alias(ChannelSnapshot.__table__, name="chan_snap_prev")
+
+    query = (
+        select(
+            Channel.id,
+            Channel.youtube_channel_id,
+            Channel.channel_name,
+            Channel.thumbnail_url,
+            snap_today.c.view_count.label("view_count"),
+            (snap_today.c.view_count - snap_prev.c.view_count).label("view_delta"),
+        )
+        .where(Channel.status != "deleted")
+        .join(latest_sq, Channel.id == latest_sq.c.channel_id)
+        .join(
+            snap_today,
+            (snap_today.c.channel_id == Channel.id)
+            & (snap_today.c.snapshot_date == latest_sq.c.latest_date),
+        )
+        .join(prev_sq, Channel.id == prev_sq.c.channel_id)
+        .join(
+            snap_prev,
+            (snap_prev.c.channel_id == Channel.id)
+            & (snap_prev.c.snapshot_date == prev_sq.c.prev_date),
+        )
+        .order_by(desc(snap_today.c.view_count - snap_prev.c.view_count))
+        .limit(limit)
+    )
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    return [
+        {
+            "id": row.id,
+            "youtube_channel_id": row.youtube_channel_id,
+            "channel_name": row.channel_name,
+            "thumbnail_url": row.thumbnail_url,
+            "view_count": row.view_count,
+            "view_delta": row.view_delta,
+        }
+        for row in rows
+    ]
