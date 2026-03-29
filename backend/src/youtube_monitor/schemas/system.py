@@ -14,6 +14,7 @@ class QuotaResponse(BaseModel):
 class FetchLogResponse(BaseModel):
     id: int
     job_name: str
+    channel_id: Optional[int] = None
     status: str
     channels_processed: int
     videos_processed: int

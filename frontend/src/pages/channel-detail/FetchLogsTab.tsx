@@ -12,14 +12,16 @@ import { Button } from "@/components/ui/button";
 
 interface FetchLogsTabProps {
   channelId: number;
+  jobType?: string;
 }
 
-export function FetchLogsTab({ channelId }: FetchLogsTabProps) {
+export function FetchLogsTab({ channelId, jobType }: FetchLogsTabProps) {
   const [page, setPage] = useState(1);
   const limit = 20;
-  
+
   const { data, isLoading, error } = useFetchLogs({
     channel_id: channelId,
+    job_type: jobType,
     page,
     limit
   });

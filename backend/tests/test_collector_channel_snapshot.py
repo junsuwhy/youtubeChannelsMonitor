@@ -90,12 +90,15 @@ async def test_snapshot_job_success(db_session):
         assert snap.view_count == 500000
         assert snap.video_count == 50
 
-    # Verify fetch_log
+    # Verify fetch_log: one per channel
     logs = (await db_session.execute(select(FetchLog))).scalars().all()
-    assert len(logs) == 1
-    assert logs[0].status == "success"
-    assert logs[0].channels_processed == 2
-    assert logs[0].api_units_used == 2
+    assert len(logs) == 2
+    assert all(log.status == "success" for log in logs)
+    assert all(log.channels_processed == 1 for log in logs)
+    assert all(log.api_units_used == 1 for log in logs)
+    log_channel_ids = {log.channel_id for log in logs}
+    assert ch1.id in log_channel_ids
+    assert ch2.id in log_channel_ids
     assert result["status"] == "success"
 
 

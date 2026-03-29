@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from datetime import datetime, date
+from pydantic import BaseModel, field_validator
+from datetime import datetime, date, timezone
 from typing import Optional, Any, List
 
 
@@ -35,11 +35,19 @@ class VideoSnapshotResponse(BaseModel):
     id: int
     video_id: int
     snapshot_date: date
+    crawled_at: Optional[datetime] = None
     view_count: Optional[int] = None
     like_count: Optional[int] = None
     comment_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("crawled_at", mode="after")
+    @classmethod
+    def ensure_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
 
 class ChannelSnapshotResponse(BaseModel):

@@ -37,7 +37,7 @@ async def run_channel_snapshot_job(
     4. Upsert ChannelSnapshot for today (UTC+8 date), idempotent via ON CONFLICT DO UPDATE
     5. Channels not returned by API → set status='terminated'
     6. On QuotaExceededException → stop immediately, write fetch_log status='failed'
-    7. Write fetch_log at the end
+    7. Write one fetch_log per channel at the end
 
     Returns: dict with job stats
     """
@@ -55,6 +55,7 @@ async def run_channel_snapshot_job(
     if not active_channels:
         fetch_log = FetchLog(
             job_name="channel_snapshot",
+            channel_id=channel_id,
             status="success",
             channels_processed=0,
             videos_processed=0,
@@ -69,90 +70,103 @@ async def run_channel_snapshot_job(
 
     try:
         for channel in active_channels:
-            data = await youtube_client.get_channel_info(channel.youtube_channel_id)
-            api_units_used += 1
+            ch_started_at = datetime.now(timezone.utc)
+            ch_status = "success"
+            ch_error = None
 
-            if data is None:
-                # Channel not found on YouTube → mark as terminated
-                await session.execute(
-                    update(Channel)
-                    .where(Channel.id == channel.id)
-                    .values(status="terminated")
-                )
-                channels_processed += 1
-                continue
-
-            # Update channel fields
-            await session.execute(
-                update(Channel)
-                .where(Channel.id == channel.id)
-                .values(
-                    channel_name=data["channel_name"],
-                    description=data.get("description"),
-                    thumbnail_url=data.get("thumbnail_url"),
-                    country=data.get("country"),
-                    custom_url=data.get("custom_url"),
-                    updated_at=datetime.now(timezone.utc),
-                )
-            )
-
-            # Upsert ChannelSnapshot (idempotent)
-            stmt = sqlite_insert(ChannelSnapshot).values(
-                channel_id=channel.id,
-                snapshot_date=today,
-                subscriber_count=data["subscriber_count"],
-                view_count=data["view_count"],
-                video_count=data["video_count"],
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["channel_id", "snapshot_date"],
-                set_={
-                    "subscriber_count": stmt.excluded.subscriber_count,
-                    "view_count": stmt.excluded.view_count,
-                    "video_count": stmt.excluded.video_count,
-                },
-            )
-            await session.execute(stmt)
-            channels_processed += 1
-
-            # Run anomaly detection for this channel (non-fatal)
             try:
-                from youtube_monitor.services.anomaly_detector import AnomalyDetector
-                from youtube_monitor.crud.anomaly import create_anomaly_events
-                from sqlalchemy import select as _select
-                from youtube_monitor.models.channel_snapshot import (
-                    ChannelSnapshot as _CS,
-                )
+                data = await youtube_client.get_channel_info(channel.youtube_channel_id)
+                api_units_used += 1
 
-                snap_result = await session.execute(
-                    _select(_CS)
-                    .where(_CS.channel_id == channel.id)
-                    .order_by(_CS.snapshot_date.desc())
-                    .limit(30)
-                )
-                recent_snaps = list(snap_result.scalars().all())
-                if len(recent_snaps) >= 7:
-                    detector = AnomalyDetector()
-                    events = detector.detect_channel_anomalies(channel.id, recent_snaps)
-                    if events:
-                        await create_anomaly_events(session, events)
-            except Exception as _e:
-                logger.warning(
-                    "Anomaly detection failed for channel %s: %s", channel.id, _e
-                )
+                if data is None:
+                    # Channel not found on YouTube → mark as terminated
+                    await session.execute(
+                        update(Channel)
+                        .where(Channel.id == channel.id)
+                        .values(status="terminated")
+                    )
+                    channels_processed += 1
+                else:
+                    # Update channel fields
+                    await session.execute(
+                        update(Channel)
+                        .where(Channel.id == channel.id)
+                        .values(
+                            channel_name=data["channel_name"],
+                            description=data.get("description"),
+                            thumbnail_url=data.get("thumbnail_url"),
+                            country=data.get("country"),
+                            custom_url=data.get("custom_url"),
+                            updated_at=datetime.now(timezone.utc),
+                        )
+                    )
 
-        # All channels processed successfully
-        fetch_log = FetchLog(
-            job_name="channel_snapshot",
-            status="success",
-            channels_processed=channels_processed,
-            videos_processed=0,
-            api_units_used=api_units_used,
-            error_message=None,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-        )
-        session.add(fetch_log)
+                    # Upsert ChannelSnapshot (idempotent)
+                    stmt = sqlite_insert(ChannelSnapshot).values(
+                        channel_id=channel.id,
+                        snapshot_date=today,
+                        subscriber_count=data["subscriber_count"],
+                        view_count=data["view_count"],
+                        video_count=data["video_count"],
+                    )
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=["channel_id", "snapshot_date"],
+                        set_={
+                            "subscriber_count": stmt.excluded.subscriber_count,
+                            "view_count": stmt.excluded.view_count,
+                            "video_count": stmt.excluded.video_count,
+                        },
+                    )
+                    await session.execute(stmt)
+                    channels_processed += 1
+
+                    # Run anomaly detection for this channel (non-fatal)
+                    try:
+                        from youtube_monitor.services.anomaly_detector import AnomalyDetector
+                        from youtube_monitor.crud.anomaly import create_anomaly_events
+                        from sqlalchemy import select as _select
+                        from youtube_monitor.models.channel_snapshot import (
+                            ChannelSnapshot as _CS,
+                        )
+
+                        snap_result = await session.execute(
+                            _select(_CS)
+                            .where(_CS.channel_id == channel.id)
+                            .order_by(_CS.snapshot_date.desc())
+                            .limit(30)
+                        )
+                        recent_snaps = list(snap_result.scalars().all())
+                        if len(recent_snaps) >= 7:
+                            detector = AnomalyDetector()
+                            events = detector.detect_channel_anomalies(channel.id, recent_snaps)
+                            if events:
+                                await create_anomaly_events(session, events)
+                    except Exception as _e:
+                        logger.warning(
+                            "Anomaly detection failed for channel %s: %s", channel.id, _e
+                        )
+
+            except QuotaExceededException:
+                raise
+            except Exception as e:
+                ch_status = "failed"
+                ch_error = str(e)
+                logger.error("Error processing channel %s: %s", channel.id, e)
+
+            # Write per-channel fetch log
+            ch_log = FetchLog(
+                job_name="channel_snapshot",
+                channel_id=channel.id,
+                status=ch_status,
+                channels_processed=1 if ch_status == "success" else 0,
+                videos_processed=0,
+                api_units_used=1,
+                error_message=ch_error,
+                started_at=ch_started_at,
+                finished_at=datetime.now(timezone.utc),
+            )
+            session.add(ch_log)
+
         await session.commit()
 
         return {
@@ -165,6 +179,7 @@ async def run_channel_snapshot_job(
         logger.error("Quota exceeded during channel snapshot job: %s", e)
         fetch_log = FetchLog(
             job_name="channel_snapshot",
+            channel_id=channel_id,
             status="failed",
             channels_processed=channels_processed,
             videos_processed=0,

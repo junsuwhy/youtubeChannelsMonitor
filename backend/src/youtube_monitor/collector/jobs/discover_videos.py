@@ -40,7 +40,7 @@ async def run_discover_videos_job(
        d. If no new videos → skip (no API call)
        e. Fetch details for new video IDs only
        f. Upsert new videos with rapid_tracking_until = today+7
-    3. Write fetch_log with job_name='discover_videos'
+    3. Write one fetch_log per channel with job_name='discover_videos'
     4. On QuotaExceededException → stop immediately, write fetch_log status='failed'
 
     Returns: dict with job stats
@@ -58,142 +58,164 @@ async def run_discover_videos_job(
 
     try:
         for channel in active_channels:
-            # Step 1: Get uploads_playlist_id
-            playlist_id = channel.uploads_playlist_id
-            if not playlist_id:
-                # Need to call the API to get it
-                channel_data = await youtube_client.get_channel_info(
-                    channel.youtube_channel_id
-                )
-                api_units_used += 1
+            ch_started_at = datetime.now(timezone.utc)
+            ch_videos = 0
+            ch_units = 0
+            ch_status = "success"
+            ch_error = None
 
-                if channel_data is None:
-                    logger.warning(
-                        "Channel %s not found on YouTube, skipping",
-                        channel.youtube_channel_id,
-                    )
-                    continue
-
-                playlist_id = channel_data.get("uploads_playlist_id", "")
+            try:
+                # Step 1: Get uploads_playlist_id
+                playlist_id = channel.uploads_playlist_id
                 if not playlist_id:
-                    logger.warning(
-                        "No uploads playlist for channel %s, skipping",
-                        channel.youtube_channel_id,
+                    # Need to call the API to get it
+                    channel_data = await youtube_client.get_channel_info(
+                        channel.youtube_channel_id
                     )
-                    continue
+                    ch_units += 1
+                    api_units_used += 1
 
-                # Persist uploads_playlist_id immediately so it survives
-                # even if the later video-discovery steps fail
-                await session.execute(
-                    update(Channel)
-                    .where(Channel.id == channel.id)
-                    .values(uploads_playlist_id=playlist_id)
-                )
-                await session.commit()
+                    if channel_data is None:
+                        logger.warning(
+                            "Channel %s not found on YouTube, skipping",
+                            channel.youtube_channel_id,
+                        )
+                        ch_status = "failed"
+                        ch_error = "Channel not found on YouTube"
+                    else:
+                        playlist_id = channel_data.get("uploads_playlist_id", "")
+                        if not playlist_id:
+                            logger.warning(
+                                "No uploads playlist for channel %s, skipping",
+                                channel.youtube_channel_id,
+                            )
+                            ch_status = "failed"
+                            ch_error = "No uploads playlist found"
+                        else:
+                            # Persist uploads_playlist_id immediately
+                            await session.execute(
+                                update(Channel)
+                                .where(Channel.id == channel.id)
+                                .values(uploads_playlist_id=playlist_id)
+                            )
+                            await session.commit()
 
-            # Step 2: Fetch video IDs from playlist (up to 200, max_pages=4)
-            video_ids = await youtube_client.get_uploads_playlist_items(
-                playlist_id, max_pages=4
+                if playlist_id and ch_status == "success":
+                    # Step 2: Fetch video IDs from playlist (up to 200, max_pages=4)
+                    video_ids = await youtube_client.get_uploads_playlist_items(
+                        playlist_id, max_pages=4
+                    )
+                    pages_used = min(len(video_ids) // 50 + 1, 4)
+                    ch_units += pages_used
+                    api_units_used += pages_used
+
+                    if not video_ids:
+                        logger.debug(
+                            "Empty playlist for channel %s, skipping",
+                            channel.youtube_channel_id,
+                        )
+                    else:
+                        # Step 3: Filter out video IDs already in DB
+                        existing_result = await session.execute(
+                            select(Video.youtube_video_id).where(
+                                Video.youtube_video_id.in_(video_ids)
+                            )
+                        )
+                        existing_ids = set(existing_result.scalars().all())
+                        new_video_ids = [vid for vid in video_ids if vid not in existing_ids]
+
+                        if new_video_ids:
+                            # Step 4: Fetch details for new videos only
+                            video_details = await youtube_client.get_video_details(new_video_ids)
+                            detail_units = max(1, (len(new_video_ids) + 49) // 50)
+                            ch_units += detail_units
+                            api_units_used += detail_units
+
+                            # Step 5: Upsert new videos and create initial VideoSnapshot
+                            rapid_until = today + timedelta(days=7)
+                            crawled_at = datetime.now(timezone.utc)
+                            for video_data in video_details:
+                                yt_video_id = video_data["youtube_video_id"]
+                                stmt = sqlite_insert(Video).values(
+                                    youtube_video_id=yt_video_id,
+                                    channel_id=channel.id,
+                                    title=video_data.get("title"),
+                                    description=video_data.get("description"),
+                                    published_at=video_data.get("published_at"),
+                                    duration=video_data.get("duration"),
+                                    tags=video_data.get("tags"),
+                                    topic_categories=video_data.get("topic_categories"),
+                                    status="public",
+                                    rapid_tracking_until=rapid_until,
+                                )
+                                stmt = stmt.on_conflict_do_update(
+                                    index_elements=["youtube_video_id"],
+                                    set_={
+                                        "title": stmt.excluded.title,
+                                        "description": stmt.excluded.description,
+                                        "published_at": stmt.excluded.published_at,
+                                        "duration": stmt.excluded.duration,
+                                        "tags": stmt.excluded.tags,
+                                        "topic_categories": stmt.excluded.topic_categories,
+                                        "status": stmt.excluded.status,
+                                        "rapid_tracking_until": stmt.excluded.rapid_tracking_until,
+                                    },
+                                )
+                                await session.execute(stmt)
+
+                                video_result = await session.execute(
+                                    select(Video.id).where(Video.youtube_video_id == yt_video_id)
+                                )
+                                video_db_id = video_result.scalar_one()
+
+                                snap_stmt = sqlite_insert(VideoSnapshot).values(
+                                    video_id=video_db_id,
+                                    snapshot_date=today,
+                                    crawled_at=crawled_at,
+                                    view_count=video_data.get("view_count"),
+                                    like_count=video_data.get("like_count"),
+                                    comment_count=video_data.get("comment_count"),
+                                )
+                                snap_stmt = snap_stmt.on_conflict_do_update(
+                                    index_elements=["video_id", "snapshot_date"],
+                                    set_={
+                                        "crawled_at": snap_stmt.excluded.crawled_at,
+                                        "view_count": snap_stmt.excluded.view_count,
+                                        "like_count": snap_stmt.excluded.like_count,
+                                        "comment_count": snap_stmt.excluded.comment_count,
+                                    },
+                                )
+                                await session.execute(snap_stmt)
+
+                            ch_videos += len(video_details)
+                            total_videos_processed += len(video_details)
+                            logger.info(
+                                "Channel %s: discovered %d new videos",
+                                channel.youtube_channel_id,
+                                len(video_details),
+                            )
+
+            except QuotaExceededException:
+                raise
+            except Exception as e:
+                ch_status = "failed"
+                ch_error = str(e)
+                logger.error("Error processing channel %s: %s", channel.id, e)
+
+            # Write per-channel fetch log
+            ch_log = FetchLog(
+                job_name="discover_videos",
+                channel_id=channel.id,
+                status=ch_status,
+                channels_processed=0,
+                videos_processed=ch_videos,
+                api_units_used=ch_units,
+                error_message=ch_error,
+                started_at=ch_started_at,
+                finished_at=datetime.now(timezone.utc),
             )
-            api_units_used += min(len(video_ids) // 50 + 1, 4)  # 1 unit per page call
+            session.add(ch_log)
 
-            if not video_ids:
-                logger.debug(
-                    "Empty playlist for channel %s, skipping",
-                    channel.youtube_channel_id,
-                )
-                continue
-
-            # Step 3: Filter out video IDs already in DB
-            existing_result = await session.execute(
-                select(Video.youtube_video_id).where(
-                    Video.youtube_video_id.in_(video_ids)
-                )
-            )
-            existing_ids = set(existing_result.scalars().all())
-            new_video_ids = [vid for vid in video_ids if vid not in existing_ids]
-
-            # Step 4: If no new videos, skip
-            if not new_video_ids:
-                logger.debug("No new videos for channel %s", channel.youtube_channel_id)
-                continue
-
-            # Step 5: Fetch details for new videos only
-            video_details = await youtube_client.get_video_details(new_video_ids)
-            api_units_used += max(1, (len(new_video_ids) + 49) // 50)
-
-            # Step 6: Upsert new videos and create initial VideoSnapshot
-            rapid_until = today + timedelta(days=7)
-            for video_data in video_details:
-                yt_video_id = video_data["youtube_video_id"]
-                stmt = sqlite_insert(Video).values(
-                    youtube_video_id=yt_video_id,
-                    channel_id=channel.id,
-                    title=video_data.get("title"),
-                    description=video_data.get("description"),
-                    published_at=video_data.get("published_at"),
-                    duration=video_data.get("duration"),
-                    tags=video_data.get("tags"),
-                    topic_categories=video_data.get("topic_categories"),
-                    status="public",
-                    rapid_tracking_until=rapid_until,
-                )
-                stmt = stmt.on_conflict_do_update(
-                    index_elements=["youtube_video_id"],
-                    set_={
-                        "title": stmt.excluded.title,
-                        "description": stmt.excluded.description,
-                        "published_at": stmt.excluded.published_at,
-                        "duration": stmt.excluded.duration,
-                        "tags": stmt.excluded.tags,
-                        "topic_categories": stmt.excluded.topic_categories,
-                        "status": stmt.excluded.status,
-                        "rapid_tracking_until": stmt.excluded.rapid_tracking_until,
-                    },
-                )
-                await session.execute(stmt)
-
-                video_result = await session.execute(
-                    select(Video.id).where(Video.youtube_video_id == yt_video_id)
-                )
-                video_db_id = video_result.scalar_one()
-
-                snap_stmt = sqlite_insert(VideoSnapshot).values(
-                    video_id=video_db_id,
-                    snapshot_date=today,
-                    view_count=video_data.get("view_count"),
-                    like_count=video_data.get("like_count"),
-                    comment_count=video_data.get("comment_count"),
-                )
-                snap_stmt = snap_stmt.on_conflict_do_update(
-                    index_elements=["video_id", "snapshot_date"],
-                    set_={
-                        "view_count": snap_stmt.excluded.view_count,
-                        "like_count": snap_stmt.excluded.like_count,
-                        "comment_count": snap_stmt.excluded.comment_count,
-                    },
-                )
-                await session.execute(snap_stmt)
-
-            total_videos_processed += len(video_details)
-            logger.info(
-                "Channel %s: discovered %d new videos",
-                channel.youtube_channel_id,
-                len(video_details),
-            )
-
-        # All channels processed successfully
-        fetch_log = FetchLog(
-            job_name="discover_videos",
-            status="success",
-            channels_processed=len(active_channels),
-            videos_processed=total_videos_processed,
-            api_units_used=api_units_used,
-            error_message=None,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-        )
-        session.add(fetch_log)
         await session.commit()
 
         return {
@@ -207,6 +229,7 @@ async def run_discover_videos_job(
         logger.error("Quota exceeded during discover_videos job: %s", e)
         fetch_log = FetchLog(
             job_name="discover_videos",
+            channel_id=channel_id,
             status="failed",
             channels_processed=0,
             videos_processed=total_videos_processed,
@@ -229,6 +252,7 @@ async def run_discover_videos_job(
         logger.error("Unexpected error during discover_videos job: %s", e)
         fetch_log = FetchLog(
             job_name="discover_videos",
+            channel_id=channel_id,
             status="failed",
             channels_processed=0,
             videos_processed=total_videos_processed,

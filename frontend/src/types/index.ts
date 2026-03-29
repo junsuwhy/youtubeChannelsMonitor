@@ -88,6 +88,7 @@ export interface VideoSnapshot {
   id: number;
   video_id: number;
   snapshot_date: string;
+  crawled_at: string | null;
   view_count: number | null;
   like_count: number | null;
   comment_count: number | null;

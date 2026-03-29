@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { useVideo, useVideoSnapshots, useVideos } from "@/hooks/useVideos";
+import { FetchLogsTab } from "@/pages/channel-detail/FetchLogsTab";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SparklineCard } from "@/components/SparklineCard";
@@ -165,7 +166,7 @@ export default function VideoDetailPage() {
   const thumbnailUrl = imgError ? standardThumbnail : (video.thumbnail_url || maxResThumbnail);
 
   const chartData = snapshots.map((s) => ({
-    date: s.snapshot_date,
+    date: s.crawled_at ? formatDateTime(s.crawled_at) : formatDate(s.snapshot_date),
     value: s[metric] || 0,
   }));
 
@@ -370,6 +371,15 @@ export default function VideoDetailPage() {
         </CardContent>
       </Card>
 
+      <Card data-testid="video-fetch-logs">
+        <CardHeader>
+          <CardTitle>爬取紀錄</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0 pb-4">
+          <FetchLogsTab channelId={video.channel_id} jobType="video_snapshot" />
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="space-y-6">
           <Card data-testid="video-metadata">
@@ -501,7 +511,7 @@ export default function VideoDetailPage() {
                             <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
                               <span>{formatNumber(v.view_count || 0)} 觀看</span>
                               <span className="w-1 h-1 rounded-full bg-muted-foreground/50"></span>
-                              <span>{formatDate(v.published_at || "")}</span>
+                              <span>{formatDateTime(v.published_at || "")}</span>
                             </div>
                           </div>
                         </Link>

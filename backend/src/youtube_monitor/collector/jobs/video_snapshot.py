@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone, timedelta
+from collections import defaultdict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -38,8 +39,8 @@ async def run_video_snapshot_job(
     2. Batch video IDs into groups of 50
     3. Call youtube_client.get_video_details(batch) for each batch
     4. Videos missing from API response → set status='private'
-    5. Upsert video_snapshots for each returned video
-    6. Write fetch_log
+    5. Upsert video_snapshots for each returned video (with crawled_at)
+    6. Write one fetch_log per channel
     7. On QuotaExceededException → fetch_log status='failed', stop immediately
 
     Returns: dict with job stats
@@ -114,6 +115,7 @@ async def run_video_snapshot_job(
     if not videos_to_snapshot:
         fetch_log = FetchLog(
             job_name="video_snapshot",
+            channel_id=channel_id,
             status="success",
             channels_processed=0,
             videos_processed=0,
@@ -130,24 +132,33 @@ async def run_video_snapshot_job(
     video_lookup: dict[str, Video] = {v.youtube_video_id: v for v in videos_to_snapshot}
     all_youtube_ids = list(video_lookup.keys())
 
+    # Track per-channel stats for FetchLog
+    channel_videos_processed: dict[int, int] = defaultdict(int)
+    channel_started_at: dict[int, datetime] = {
+        v.channel_id: started_at for v in videos_to_snapshot
+    }
+
     try:
         returned_youtube_ids: set[str] = set()
+        crawled_at = datetime.now(timezone.utc)
 
         # Batch into groups of 50
         for i in range(0, len(all_youtube_ids), 50):
             batch = all_youtube_ids[i : i + 50]
             video_details = await youtube_client.get_video_details(batch)
             api_units_used += 1
+            crawled_at = datetime.now(timezone.utc)
 
             for detail in video_details:
                 yt_id = detail["youtube_video_id"]
                 returned_youtube_ids.add(yt_id)
                 video = video_lookup[yt_id]
 
-                # Upsert VideoSnapshot
+                # Upsert VideoSnapshot with crawled_at
                 stmt = sqlite_insert(VideoSnapshot).values(
                     video_id=video.id,
                     snapshot_date=today,
+                    crawled_at=crawled_at,
                     view_count=detail["view_count"],
                     like_count=detail["like_count"],
                     comment_count=detail["comment_count"],
@@ -155,6 +166,7 @@ async def run_video_snapshot_job(
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["video_id", "snapshot_date"],
                     set_={
+                        "crawled_at": stmt.excluded.crawled_at,
                         "view_count": stmt.excluded.view_count,
                         "like_count": stmt.excluded.like_count,
                         "comment_count": stmt.excluded.comment_count,
@@ -162,6 +174,7 @@ async def run_video_snapshot_job(
                 )
                 await session.execute(stmt)
                 videos_processed += 1
+                channel_videos_processed[video.channel_id] += 1
 
             # Videos in batch but NOT returned by API → gone private
             for yt_id in batch:
@@ -174,18 +187,22 @@ async def run_video_snapshot_job(
                     )
                     logger.info("Video %s not returned by API → marked private", yt_id)
 
-        # Write success fetch_log
-        fetch_log = FetchLog(
-            job_name="video_snapshot",
-            status="success",
-            channels_processed=0,
-            videos_processed=videos_processed,
-            api_units_used=api_units_used,
-            error_message=None,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-        )
-        session.add(fetch_log)
+        # Write per-channel fetch logs
+        finished_at = datetime.now(timezone.utc)
+        for ch_id, ch_videos in channel_videos_processed.items():
+            ch_log = FetchLog(
+                job_name="video_snapshot",
+                channel_id=ch_id,
+                status="success",
+                channels_processed=0,
+                videos_processed=ch_videos,
+                api_units_used=0,
+                error_message=None,
+                started_at=channel_started_at.get(ch_id, started_at),
+                finished_at=finished_at,
+            )
+            session.add(ch_log)
+
         await session.commit()
 
         return {
@@ -198,6 +215,7 @@ async def run_video_snapshot_job(
         logger.error("Quota exceeded during video_snapshot job: %s", e)
         fetch_log = FetchLog(
             job_name="video_snapshot",
+            channel_id=channel_id,
             status="failed",
             channels_processed=0,
             videos_processed=videos_processed,
@@ -220,6 +238,7 @@ async def run_video_snapshot_job(
         logger.error("Unexpected error during video_snapshot job: %s", e)
         fetch_log = FetchLog(
             job_name="video_snapshot",
+            channel_id=channel_id,
             status="failed",
             channels_processed=0,
             videos_processed=videos_processed,
