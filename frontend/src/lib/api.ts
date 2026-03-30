@@ -5,6 +5,7 @@ import type {
   AnomalyListResponse,
   FetchLogListResponse, StatsOverview, QuotaResponse,
   TrendingVideosResponse, TrendingChannelsResponse,
+  DailyStatResponse,
 } from "@/types/index";
 
 const api = axios.create({ baseURL: "/api" });
@@ -144,6 +145,7 @@ export async function fetchFetchLogs(params?: {
   channel_id?: number;
   page?: number;
   limit?: number;
+  status?: string;
 }): Promise<FetchLogListResponse> {
   const res = await api.get("/system/logs", { params });
   return res.data;
@@ -171,6 +173,22 @@ export async function fetchTrendingVideos(limit?: number): Promise<TrendingVideo
 
 export async function fetchTrendingChannels(limit?: number): Promise<TrendingChannelsResponse> {
   const res = await api.get("/stats/channels/trending", { params: { limit } });
+  return res.data;
+}
+
+// Misc
+export async function fetchQuotaDaily(days: number = 30): Promise<DailyStatResponse> {
+  const res = await api.get("/misc/quota/daily", { params: { days } });
+  return res.data;
+}
+
+export async function fetchChannelsDailyAdditions(days: number = 30): Promise<DailyStatResponse> {
+  const res = await api.get("/misc/channels/daily-additions", { params: { days } });
+  return res.data;
+}
+
+export async function fetchVideosDailyNew(days: number = 30): Promise<DailyStatResponse> {
+  const res = await api.get("/misc/videos/daily-new", { params: { days } });
   return res.data;
 }
 

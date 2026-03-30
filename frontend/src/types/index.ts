@@ -248,3 +248,16 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
 }
+
+// ============================================================================
+// Misc Types
+// ============================================================================
+
+export interface DailyStatPoint {
+  date: string;
+  value: number;
+}
+
+export interface DailyStatResponse {
+  items: DailyStatPoint[];
+}
