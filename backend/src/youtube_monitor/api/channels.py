@@ -194,7 +194,8 @@ async def create_channel(
     try:
         channel = await channel_crud.create_channel(db, data)
         background_tasks.add_task(_run_channel_fetch_background, channel.id)
-        return channel
+        stats_map = await channel_crud.get_latest_snapshot_stats(db, [channel.id])
+        return _channel_response(channel, stats_map.get(channel.id, {}))
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
