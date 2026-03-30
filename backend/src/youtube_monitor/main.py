@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from youtube_monitor.api.anomalies import router as anomaly_router
 from youtube_monitor.api.auth import router as auth_router
 from youtube_monitor.api.channels import router as channels_router
+from youtube_monitor.api.misc import router as misc_router
 from youtube_monitor.api.stats import router as stats_router
 from youtube_monitor.api.system import router as system_router
 from youtube_monitor.api.videos import router as videos_router
@@ -52,6 +53,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(channels_router, prefix="/api")
 app.include_router(videos_router, prefix="/api")
 app.include_router(stats_router, prefix="/api")
+app.include_router(misc_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(anomaly_router, prefix="/api")
 
