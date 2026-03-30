@@ -9,7 +9,7 @@ export function Layout() {
     { to: "/", label: "Dashboard" },
     { to: "/channels", label: "Channels" },
     { to: "/videos", label: "Videos" },
-    { to: "/channels/import", label: "Import" },
+    { to: "/misc", label: "其他" },
   ];
 
   return (

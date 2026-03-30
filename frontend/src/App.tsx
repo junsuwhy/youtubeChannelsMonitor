@@ -10,6 +10,7 @@ import ChannelDetailPage from "./pages/ChannelDetailPage";
 import ChannelImportPage from "./pages/ChannelImportPage";
 import VideoListPage from "./pages/VideoListPage";
 import VideoDetailPage from "@/pages/VideoDetailPage";
+import MiscPage from "@/pages/MiscPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -23,6 +24,7 @@ const router = createBrowserRouter([
       { path: "channels/:id", element: <ChannelDetailPage /> },
       { path: "videos", element: <VideoListPage /> },
       { path: "videos/:id", element: <VideoDetailPage /> },
+      { path: "misc", element: <MiscPage /> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },
