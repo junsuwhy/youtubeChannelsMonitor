@@ -33,9 +33,9 @@ export function DailyBarChart({
           }}
           data-testid="days-selector"
         >
-          <ToggleGroupItem value="7" aria-label="7 days">7</ToggleGroupItem>
-          <ToggleGroupItem value="14" aria-label="14 days">14</ToggleGroupItem>
-          <ToggleGroupItem value="30" aria-label="30 days">30</ToggleGroupItem>
+          <ToggleGroupItem value="7" aria-label="7 days" data-testid="day-option-7">7</ToggleGroupItem>
+          <ToggleGroupItem value="14" aria-label="14 days" data-testid="day-option-14">14</ToggleGroupItem>
+          <ToggleGroupItem value="30" aria-label="30 days" data-testid="day-option-30">30</ToggleGroupItem>
         </ToggleGroup>
       </div>
       <div className="h-[200px] w-full">

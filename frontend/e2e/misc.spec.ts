@@ -94,7 +94,7 @@ test.describe('Misc Page', () => {
 
     // Click the "7" toggle in the first days-selector
     const firstDaysSelector = page.locator('[data-testid="days-selector"]').first();
-    await firstDaysSelector.locator('button').filter({ hasText: '7' }).click();
+    await firstDaysSelector.locator('[data-testid="day-option-7"]').click();
     await page.waitForTimeout(800);
     expect(capturedUrl).toMatch(/days=7/);
   });
