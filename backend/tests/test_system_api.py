@@ -213,3 +213,38 @@ async def test_manual_trigger_quota_insufficient(api_client_with_session):
     assert response.status_code == 429
     data = response.json()
     assert "remaining" in data["detail"]
+
+
+async def test_fetch_logs_status_filter(api_client, db_session):
+    """status query param filters by FetchLog.status."""
+    # Create test logs with different statuses
+    log_success = FetchLog(job_name="job_1", status="success", api_units_used=10)
+    log_failed = FetchLog(job_name="job_2", status="failed", api_units_used=5)
+    db_session.add(log_success)
+    db_session.add(log_failed)
+    await db_session.commit()
+
+    # Filter by status=failed
+    response = await api_client.get("/api/system/logs?status=failed")
+    assert response.status_code == 200
+    data = response.json()
+    # All returned items should have status == "failed"
+    for item in data["items"]:
+        assert item["status"] == "failed"
+
+
+async def test_fetch_logs_no_status_filter_backward_compatible(api_client, db_session):
+    """Calling GET /system/logs without status param returns all logs (backward compatible)."""
+    # Create test logs with different statuses
+    log_success = FetchLog(job_name="job_1", status="success", api_units_used=10)
+    log_failed = FetchLog(job_name="job_2", status="failed", api_units_used=5)
+    db_session.add(log_success)
+    db_session.add(log_failed)
+    await db_session.commit()
+
+    # Call without status filter
+    response = await api_client.get("/api/system/logs")
+    assert response.status_code == 200
+    data = response.json()
+    # Both logs should be returned
+    assert data["total"] == 2

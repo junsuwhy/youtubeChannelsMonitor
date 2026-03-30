@@ -70,6 +70,7 @@ async def get_logs(
     limit: int = Query(default=50, ge=1, le=200),
     job_type: Optional[str] = Query(default=None),
     channel_id: int | None = Query(default=None),
+    status: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
@@ -83,6 +84,10 @@ async def get_logs(
     if channel_id is not None:
         query = query.where(FetchLog.channel_id == channel_id)
         count_query = count_query.where(FetchLog.channel_id == channel_id)
+
+    if status:
+        query = query.where(FetchLog.status == status)
+        count_query = count_query.where(FetchLog.status == status)
 
     total = await db.scalar(count_query)
     offset = (page - 1) * limit
