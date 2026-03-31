@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime
@@ -99,6 +99,7 @@ async def get_logs(
 
 @router.post("/system/fetch/trigger", response_model=TriggerResponse)
 async def trigger_fetch(
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     current_user=Depends(get_current_user),
 ):
@@ -124,7 +125,7 @@ async def trigger_fetch(
         # Import scheduler if available (wired up in Task 18)
         from youtube_monitor.collector.scheduler import trigger_all_jobs
 
-        await trigger_all_jobs()
+        background_tasks.add_task(trigger_all_jobs)
     except (ImportError, AttributeError):
         # Scheduler not yet wired up — jobs list returned as confirmation
         pass
