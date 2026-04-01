@@ -151,13 +151,13 @@ async def test_videos_daily_gap_filling(api_client_with_session):
         youtube_video_id="vid_test_001",
         channel_id=channel.id,
         status="public",
-        created_at=today_dt,
+        published_at=today_dt,
     )
     video2 = Video(
         youtube_video_id="vid_test_002",
         channel_id=channel.id,
         status="public",
-        created_at=today_dt,
+        published_at=today_dt,
     )
     session.add(video1)
     session.add(video2)

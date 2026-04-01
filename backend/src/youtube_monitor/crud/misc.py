@@ -52,15 +52,15 @@ async def get_daily_channel_additions(
 
 
 async def get_daily_new_videos(db: AsyncSession, days: int = 30) -> DailyStatResponse:
-    """Get daily count of newly-discovered videos (by created_at) for last `days` days."""
     threshold = datetime.now(timezone.utc) - timedelta(days=days)
     result = await db.execute(
         select(
-            func.date(Video.created_at).label("date"),
+            func.date(Video.published_at).label("date"),
             func.count().label("value"),
         )
-        .where(Video.created_at >= threshold)
-        .group_by(func.date(Video.created_at))
+        .where(Video.published_at >= threshold)
+        .where(Video.published_at.is_not(None))
+        .group_by(func.date(Video.published_at))
     )
     rows = result.all()
     return DailyStatResponse(items=_gap_fill([(r.date, r.value) for r in rows], days))
