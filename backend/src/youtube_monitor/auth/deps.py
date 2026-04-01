@@ -36,3 +36,27 @@ async def get_current_user(
     if user is None or not user.is_active:
         raise credentials_exception
     return user
+
+
+async def require_content_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    from youtube_monitor.models.user import UserRole
+    if current_user.role not in (UserRole.content_admin, UserRole.user_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Content admin role required",
+        )
+    return current_user
+
+
+async def require_user_admin(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    from youtube_monitor.models.user import UserRole
+    if current_user.role != UserRole.user_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User admin role required",
+        )
+    return current_user

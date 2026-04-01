@@ -20,13 +20,7 @@ from youtube_monitor.collector.youtube_client import YouTubeClient
 from youtube_monitor.config import settings
 from youtube_monitor.api.system import _get_used_today, QUOTA_LIMIT
 from googleapiclient.errors import HttpError as YouTubeHttpError
-
-try:
-    from youtube_monitor.auth.deps import get_current_user
-except ImportError:
-
-    async def get_current_user():
-        pass
+from youtube_monitor.auth.deps import get_current_user, require_content_admin
 
 
 def _channel_response(channel, stats: dict) -> ChannelResponse:
@@ -189,7 +183,7 @@ async def create_channel(
     data: ChannelCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_content_admin),
 ):
     try:
         channel = await channel_crud.create_channel(db, data)
@@ -223,7 +217,7 @@ async def update_channel(
     channel_id: int,
     data: ChannelUpdate,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_content_admin),
 ):
     channel = await channel_crud.get_channel(db, channel_id)
     if not channel:
@@ -239,7 +233,7 @@ async def update_channel(
 async def delete_channel(
     channel_id: int,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_content_admin),
 ):
     channel = await channel_crud.get_channel(db, channel_id)
     if not channel:
@@ -253,7 +247,7 @@ async def delete_channel(
 async def fetch_channel_now(
     channel_id: int,
     db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_content_admin),
 ):
     """Immediately run all three collector jobs for a single channel.
 

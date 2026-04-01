@@ -9,6 +9,7 @@ from youtube_monitor.api.channels import router as channels_router
 from youtube_monitor.api.misc import router as misc_router
 from youtube_monitor.api.stats import router as stats_router
 from youtube_monitor.api.system import router as system_router
+from youtube_monitor.api.users import router as users_router
 from youtube_monitor.api.videos import router as videos_router
 from youtube_monitor.config import settings
 from youtube_monitor.database import AsyncSessionLocal
@@ -56,6 +57,7 @@ app.include_router(stats_router, prefix="/api")
 app.include_router(misc_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(anomaly_router, prefix="/api")
+app.include_router(users_router, prefix="/api/users", tags=["users"])
 
 
 @app.get("/health")

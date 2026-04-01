@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { createChannel } from "@/lib/api";
+import { useAuth } from "@/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,11 +14,14 @@ interface ImportRow {
 }
 
 export default function ChannelImportPage() {
+  const { canManageContent } = useAuth();
   const [inputText, setInputText] = useState("");
   const [rows, setRows] = useState<ImportRow[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [isDone, setIsDone] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  if (!canManageContent) return <Navigate to="/channels" replace />;
 
   const handleStartImport = async (e: React.FormEvent) => {
     e.preventDefault();

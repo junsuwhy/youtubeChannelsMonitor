@@ -37,10 +37,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "@/lib/formatters";
 import type { Channel } from "@/types";
+import { useAuth } from "@/providers/AuthProvider";
 
 export default function ChannelListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { canManageContent } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const searchParam = searchParams.get("search") || "";
@@ -290,11 +292,13 @@ export default function ChannelListPage() {
         </div>
         
         <div className="flex items-center gap-4 w-full sm:w-auto">
-          <Button variant="outline" asChild>
-            <Link to="/channels/import">批次匯入</Link>
-          </Button>
+          {canManageContent && (
+            <Button variant="outline" asChild>
+              <Link to="/channels/import">批次匯入</Link>
+            </Button>
+          )}
 
-          <Dialog open={dialogOpen} onOpenChange={(open) => {
+          {canManageContent && <Dialog open={dialogOpen} onOpenChange={(open) => {
             setDialogOpen(open);
             if (!open) {
               setNewChannelId("");
@@ -345,7 +349,7 @@ export default function ChannelListPage() {
                 </div>
               </form>
             </DialogContent>
-          </Dialog>
+          </Dialog>}
         </div>
       </div>
 

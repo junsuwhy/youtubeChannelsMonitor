@@ -192,4 +192,40 @@ export async function fetchVideosDailyNew(days: number = 30): Promise<DailyStatR
   return res.data;
 }
 
+export interface UserResponse {
+  id: number;
+  username: string;
+  email: string | null;
+  role: 'viewer' | 'content_admin' | 'user_admin';
+  is_active: boolean;
+}
+
+export async function getMe(): Promise<UserResponse> {
+  const res = await api.get('/auth/me');
+  return res.data;
+}
+
+export async function getUsers(): Promise<UserResponse[]> {
+  const res = await api.get('/users');
+  return res.data;
+}
+
+export async function createUser(data: {
+  username: string;
+  password: string;
+  email?: string;
+  role: string;
+}): Promise<UserResponse> {
+  const res = await api.post('/users', data);
+  return res.data;
+}
+
+export async function updateUser(
+  id: number,
+  data: { email?: string; role?: string; is_active?: boolean; password?: string }
+): Promise<UserResponse> {
+  const res = await api.patch(`/users/${id}`, data);
+  return res.data;
+}
+
 export default api;

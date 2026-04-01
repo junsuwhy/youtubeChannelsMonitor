@@ -11,3 +11,4 @@ dist
 .sisyphus/evidence
 nohup.out
 .*
+*.bak*

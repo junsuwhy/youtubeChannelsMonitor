@@ -6,6 +6,7 @@ import { Users, Eye, Video, TrendingUp, MoreHorizontal, Slash, Lock, ChevronDown
 
 import { fetchChannelTrend, fetchVideos, fetchChannelNow, deleteChannel } from "@/lib/api";
 import { useChannel, useChannelSnapshots, useUpdateChannel } from "@/hooks/useChannels";
+import { useAuth } from "@/providers/AuthProvider";
 import { useChannelAnomalies } from "@/hooks/useAnomalies";
 import type { Video as VideoType, ChannelTrendPoint, AnomalyEvent } from "@/types";
 
@@ -43,6 +44,7 @@ export default function ChannelDetailPage() {
   const { id } = useParams<{ id: string }>();
   const channelId = parseInt(id || "0", 10);
   const navigate = useNavigate();
+  const { canManageContent } = useAuth();
 
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [newTag, setNewTag] = useState("");
@@ -379,7 +381,7 @@ export default function ChannelDetailPage() {
                     {channel.tags?.map(tag => (
                       <Badge key={tag} variant="outline">{tag}</Badge>
                     ))}
-                    <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                    {canManageContent && <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
                       <PopoverTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 text-xs px-2">+ 新增標籤</Button>
                       </PopoverTrigger>
@@ -398,14 +400,14 @@ export default function ChannelDetailPage() {
                           </div>
                         </div>
                       </PopoverContent>
-                    </Popover>
+                    </Popover>}
                   </div>
 
                    <div className="text-sm text-muted-foreground bg-muted/30 p-3 rounded-md flex justify-between items-start group">
                     <div className="whitespace-pre-wrap flex-1">
                       {channel.notes || "（無備註）"}
                     </div>
-                    <Dialog open={notesDialogOpen} onOpenChange={(open) => {
+                    {canManageContent && <Dialog open={notesDialogOpen} onOpenChange={(open) => {
                       setNotesDialogOpen(open);
                       if (open) setNotesText(channel.notes || "");
                     }}>
@@ -419,10 +421,10 @@ export default function ChannelDetailPage() {
                           <DialogTitle>編輯頻道備註</DialogTitle>
                         </DialogHeader>
                         <div className="py-4">
-                          <Textarea 
-                            value={notesText} 
-                            onChange={e => setNotesText(e.target.value)} 
-                            placeholder="輸入備註內容..." 
+                          <Textarea
+                            value={notesText}
+                            onChange={e => setNotesText(e.target.value)}
+                            placeholder="輸入備註內容..."
                             className="min-h-[100px]"
                           />
                         </div>
@@ -431,7 +433,7 @@ export default function ChannelDetailPage() {
                           <Button onClick={handleSaveNotes}>儲存</Button>
                         </DialogFooter>
                       </DialogContent>
-                    </Dialog>
+                    </Dialog>}
                   </div>
 
                   <Separator />

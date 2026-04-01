@@ -3,6 +3,7 @@ import httpx
 from youtube_monitor.main import app
 from youtube_monitor.database import get_session
 from sqlalchemy.ext.asyncio import async_sessionmaker
+from youtube_monitor.models.user import UserRole
 
 
 # Override auth for testing
@@ -10,8 +11,16 @@ async def mock_current_user():
     """Mock authenticated user — bypasses JWT validation for tests."""
     from youtube_monitor.models.user import User
 
-    user = User(id=1, username="testuser", hashed_password="x", is_active=True)
+    user = User(id=1, username="testuser", hashed_password="x", is_active=True, role=UserRole.user_admin)
     return user
+
+
+def make_mock_user(role: UserRole):
+    async def _mock():
+        from youtube_monitor.models.user import User
+        return User(id=1, username="testuser", hashed_password="x",
+                    is_active=True, role=role)
+    return _mock
 
 
 @pytest.fixture
@@ -27,18 +36,31 @@ async def api_client(test_engine):
     app.dependency_overrides[get_session] = override_get_session
 
     # Import and override auth dep
-    try:
-        from youtube_monitor.auth.deps import get_current_user
-
-        app.dependency_overrides[get_current_user] = mock_current_user
-    except ImportError:
-        pass
+    from youtube_monitor.auth.deps import get_current_user
+    app.dependency_overrides[get_current_user] = mock_current_user
 
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         yield client
 
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def viewer_client(test_engine):
+    """viewer 角色的 HTTP client。"""
+    from youtube_monitor.auth.deps import get_current_user
+    async_session = async_sessionmaker(test_engine, expire_on_commit=False)
+    async def override_db():
+        async with async_session() as s:
+            yield s
+    app.dependency_overrides[get_session] = override_db
+    app.dependency_overrides[get_current_user] = make_mock_user(UserRole.viewer)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        yield client
     app.dependency_overrides.clear()
 
 
@@ -250,3 +272,43 @@ async def test_fetch_channel_now_youtube_api_error_502(api_client):
 
     assert response.status_code == 502
     assert "YouTube API error" in response.json()["detail"]
+
+
+async def test_viewer_cannot_create_channel(viewer_client):
+    """viewer 呼叫 POST /channels → 403。"""
+    resp = await viewer_client.post(
+        "/api/channels",
+        json={"youtube_channel_id": "UCviewer", "channel_name": "Viewer Test"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_viewer_cannot_patch_channel(viewer_client, test_engine):
+    """viewer 呼叫 PATCH /channels/{id} → 403。"""
+    from youtube_monitor.models.channel import Channel
+    async_session = async_sessionmaker(test_engine, expire_on_commit=False)
+    async with async_session() as s:
+        ch = Channel(youtube_channel_id="UCpatch", channel_name="Patch Test", status="active")
+        s.add(ch)
+        await s.commit()
+        await s.refresh(ch)
+        channel_id = ch.id
+    resp = await viewer_client.patch(
+        f"/api/channels/{channel_id}",
+        json={"channel_name": "Updated"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_viewer_cannot_delete_channel(viewer_client, test_engine):
+    """viewer 呼叫 DELETE /channels/{id} → 403。"""
+    from youtube_monitor.models.channel import Channel
+    async_session = async_sessionmaker(test_engine, expire_on_commit=False)
+    async with async_session() as s:
+        ch = Channel(youtube_channel_id="UCdel403", channel_name="Delete Test", status="active")
+        s.add(ch)
+        await s.commit()
+        await s.refresh(ch)
+        channel_id = ch.id
+    resp = await viewer_client.delete(f"/api/channels/{channel_id}")
+    assert resp.status_code == 403

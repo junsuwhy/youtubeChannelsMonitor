@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     username: str
     email: str | None = None
     is_active: bool
+    role: str = "viewer"
 
     model_config = {"from_attributes": True}
 

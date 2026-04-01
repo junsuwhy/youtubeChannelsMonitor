@@ -2,7 +2,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../providers/AuthProvider";
 
 export function Layout() {
-  const { logout } = useAuth();
+  const { logout, canManageUsers } = useAuth();
   const location = useLocation();
 
   const links = [
@@ -10,6 +10,7 @@ export function Layout() {
     { to: "/channels", label: "Channels" },
     { to: "/videos", label: "Videos" },
     { to: "/misc", label: "其他" },
+    ...(canManageUsers ? [{ to: "/users", label: "使用者管理" }] : []),
   ];
 
   return (
@@ -26,8 +27,8 @@ export function Layout() {
                 key={link.to}
                 to={link.to}
                 className={`block px-4 py-2 rounded-md transition-colors ${
-                  isActive 
-                    ? "bg-zinc-100 dark:bg-zinc-800 font-medium" 
+                  isActive
+                    ? "bg-zinc-100 dark:bg-zinc-800 font-medium"
                     : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
                 }`}
               >
