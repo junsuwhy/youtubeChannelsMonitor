@@ -6,7 +6,7 @@ import { Pagination } from "@/components/Pagination";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { useFetchLogs } from "@/hooks/useAnomalies";
-import { formatDate } from "@/lib/formatters";
+import { formatDateTime } from "@/lib/formatters";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -112,7 +112,7 @@ export function FetchLogsTab({ channelId, jobType }: FetchLogsTabProps) {
                 <React.Fragment key={log.id}>
                   <TableRow>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {formatDate(log.started_at || "")}
+                      {formatDateTime(log.started_at || "")}
                     </TableCell>
                     <TableCell>
                       {getJobName(log.job_name)}
