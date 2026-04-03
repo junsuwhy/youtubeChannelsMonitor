@@ -53,12 +53,11 @@ async def run_channel_snapshot_job(
     channels_processed = 0
     api_units_used = 0
 
-    query = select(Channel).where(
-        Channel.status == "active",
-        Channel.schedule_hour == current_hour,
-    )
+    query = select(Channel).where(Channel.status == "active")
     if channel_id is not None:
         query = query.where(Channel.id == channel_id)
+    else:
+        query = query.where(Channel.schedule_hour == current_hour)
     result = await session.execute(query)
     active_channels = result.scalars().all()
 

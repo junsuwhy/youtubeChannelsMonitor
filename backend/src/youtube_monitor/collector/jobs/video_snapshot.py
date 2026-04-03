@@ -56,12 +56,11 @@ async def run_video_snapshot_job(
     videos_processed = 0
     api_units_used = 0
 
-    query = select(Video).where(
-        Video.schedule_hour == current_hour,
-        Video.status == "public",
-    )
+    query = select(Video).where(Video.status == "public")
     if channel_id is not None:
         query = query.where(Video.channel_id == channel_id)
+    else:
+        query = query.where(Video.schedule_hour == current_hour)
 
     result = await session.execute(query)
     videos_to_snapshot = result.scalars().all()
