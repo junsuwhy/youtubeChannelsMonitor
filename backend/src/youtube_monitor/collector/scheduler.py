@@ -26,8 +26,9 @@ async def run_wal_checkpoint(session_factory):
 
 async def _channel_snapshot_wrapper(session_factory, youtube_client):
     """Wrapper that opens a session and runs the channel snapshot job."""
+    current_hour = datetime.now(TAIPEI_TZ).hour
     async with session_factory() as session:
-        await run_channel_snapshot_job(session, youtube_client)
+        await run_channel_snapshot_job(session, youtube_client, current_hour=current_hour)
 
 
 async def _discover_videos_wrapper(session_factory, youtube_client):

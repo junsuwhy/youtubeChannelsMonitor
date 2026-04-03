@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date
 from sqlalchemy import select
@@ -50,7 +51,7 @@ async def test_snapshot_job_empty_channels(db_session):
     """No active channels in DB → job completes, writes 1 fetch_log with channels_processed=0."""
     mock_client = MagicMock()
 
-    result = await run_channel_snapshot_job(db_session, mock_client)
+    result = await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     logs = (await db_session.execute(select(FetchLog))).scalars().all()
     assert len(logs) == 1
@@ -74,7 +75,7 @@ async def test_snapshot_job_success(db_session):
         ]
     )
 
-    result = await run_channel_snapshot_job(db_session, mock_client)
+    result = await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     # Verify 2 snapshots created
     snapshots = (await db_session.execute(select(ChannelSnapshot))).scalars().all()
@@ -123,14 +124,14 @@ async def test_snapshot_job_idempotent(db_session):
         "youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
         return_value=today,
     ):
-        await run_channel_snapshot_job(db_session, make_client())
+        await run_channel_snapshot_job(db_session, make_client(), current_hour=6)
 
     # Re-mock for second run
     with patch(
         "youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
         return_value=today,
     ):
-        await run_channel_snapshot_job(db_session, make_client())
+        await run_channel_snapshot_job(db_session, make_client(), current_hour=6)
 
     snapshots = (await db_session.execute(select(ChannelSnapshot))).scalars().all()
     assert len(snapshots) == 2, (
@@ -145,7 +146,7 @@ async def test_snapshot_job_terminated_channel(db_session):
     mock_client = MagicMock()
     mock_client.get_channel_info = AsyncMock(return_value=None)
 
-    await run_channel_snapshot_job(db_session, mock_client)
+    await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     result = await db_session.execute(select(Channel).where(Channel.id == channel.id))
     updated_channel = result.scalar_one()
@@ -165,7 +166,7 @@ async def test_snapshot_job_quota_exceeded(db_session):
         side_effect=QuotaExceededException("quotaExceeded: daily limit reached")
     )
 
-    result = await run_channel_snapshot_job(db_session, mock_client)
+    result = await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     logs = (await db_session.execute(select(FetchLog))).scalars().all()
     assert len(logs) == 1
@@ -194,8 +195,38 @@ async def test_snapshot_date_is_taipei_time(db_session):
         "youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
         return_value=known_date,
     ):
-        await run_channel_snapshot_job(db_session, mock_client)
+        await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     snapshots = (await db_session.execute(select(ChannelSnapshot))).scalars().all()
     assert len(snapshots) == 1
     assert snapshots[0].snapshot_date == known_date
+
+
+@pytest.mark.asyncio
+async def test_channel_snapshot_filters_by_schedule_hour(db_session):
+    """Only channels with matching schedule_hour are snapshotted."""
+    from datetime import date
+    ch_match = Channel(
+        youtube_channel_id="UC_snap_match", channel_name="Match",
+        status="active", source="manual", schedule_hour=4,
+    )
+    ch_skip = Channel(
+        youtube_channel_id="UC_snap_skip", channel_name="Skip",
+        status="active", source="manual", schedule_hour=9,
+    )
+    db_session.add_all([ch_match, ch_skip])
+    await db_session.commit()
+
+    mock_yt = MagicMock()
+    mock_yt.get_channel_info = AsyncMock(return_value={
+        "channel_name": "Match", "subscriber_count": 100,
+        "view_count": 500, "video_count": 10,
+        "description": None, "thumbnail_url": None, "country": None, "custom_url": None,
+    })
+
+    with patch("youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
+               return_value=date(2026, 4, 3)):
+        result = await run_channel_snapshot_job(db_session, mock_yt, current_hour=4)
+
+    assert result["channels_processed"] == 1
+    mock_yt.get_channel_info.assert_called_once_with("UC_snap_match")

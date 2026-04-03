@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -14,12 +15,14 @@ from youtube_monitor.collector.youtube_client import (
 from youtube_monitor.collector.utils import get_taipei_date
 
 logger = logging.getLogger(__name__)
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 async def run_channel_snapshot_job(
     session: AsyncSession,
     youtube_client: YouTubeClient,
     channel_id: int | None = None,
+    current_hour: int | None = None,
 ) -> dict:
     """
     Daily channel statistics snapshot job (runs at 04:00 Taipei time).
@@ -41,12 +44,18 @@ async def run_channel_snapshot_job(
 
     Returns: dict with job stats
     """
+    if current_hour is None:
+        current_hour = datetime.now(TAIPEI_TZ).hour
+
     started_at = datetime.now(timezone.utc)
     today = get_taipei_date()
     channels_processed = 0
     api_units_used = 0
 
-    query = select(Channel).where(Channel.status == "active")
+    query = select(Channel).where(
+        Channel.status == "active",
+        Channel.schedule_hour == current_hour,
+    )
     if channel_id is not None:
         query = query.where(Channel.id == channel_id)
     result = await session.execute(query)
