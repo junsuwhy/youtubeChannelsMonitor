@@ -200,19 +200,6 @@ async def run_discover_videos_job(
                                 )
                                 await session.execute(snap_stmt)
 
-                            # Update channel.schedule_hour based on latest video
-                            max_hour = max(
-                                v.get("published_at").astimezone(TAIPEI_TZ).hour
-                                for v in video_details
-                                if v.get("published_at")
-                            )
-                            new_schedule_hour = (max_hour + 1) % 24
-                            await session.execute(
-                                update(Channel)
-                                .where(Channel.id == channel.id)
-                                .values(schedule_hour=new_schedule_hour)
-                            )
-
                             ch_videos += len(video_details)
                             total_videos_processed += len(video_details)
                             logger.info(

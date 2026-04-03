@@ -2,11 +2,12 @@ import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.channel_snapshot import ChannelSnapshot
+from youtube_monitor.models.video import Video
 from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.collector.youtube_client import (
     YouTubeClient,
@@ -62,19 +63,6 @@ async def run_channel_snapshot_job(
     active_channels = result.scalars().all()
 
     if not active_channels:
-        fetch_log = FetchLog(
-            job_name="channel_snapshot",
-            channel_id=channel_id,
-            status="success",
-            channels_processed=0,
-            videos_processed=0,
-            api_units_used=0,
-            error_message=None,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-        )
-        session.add(fetch_log)
-        await session.commit()
         return {"status": "success", "channels_processed": 0, "api_units_used": 0}
 
     try:
@@ -153,6 +141,20 @@ async def run_channel_snapshot_job(
                     except Exception as _e:
                         logger.warning(
                             "Anomaly detection failed for channel %s: %s", channel.id, _e
+                        )
+
+                    # Update schedule_hour based on latest video published_at (Taipei)
+                    latest_pub_result = await session.execute(
+                        select(func.max(Video.published_at))
+                        .where(Video.channel_id == channel.id)
+                    )
+                    latest_pub = latest_pub_result.scalar()
+                    if latest_pub:
+                        new_hour = (latest_pub.astimezone(TAIPEI_TZ).hour + 1) % 24
+                        await session.execute(
+                            update(Channel)
+                            .where(Channel.id == channel.id)
+                            .values(schedule_hour=new_hour)
                         )
 
             except QuotaExceededException:

@@ -292,3 +292,26 @@ async def test_video_snapshot_no_tier_logic(db_session):
         result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
 
     assert result["videos_processed"] == 1
+
+
+@pytest.mark.asyncio
+async def test_video_snapshot_empty_no_fetch_log(db_session):
+    """沒有任何影片符合 schedule_hour → 直接 return，不寫 FetchLog。"""
+    channel = await _add_channel(db_session)
+    # 只有 schedule_hour=3 的影片，跑 current_hour=8 的 job
+    await _add_video(
+        db_session, channel.id, "vid_wrong_hour",
+        published_at=datetime(2026, 3, 20, 1, 0, tzinfo=timezone.utc),
+        schedule_hour=3,
+    )
+
+    mock_yt = MagicMock()
+
+    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+        result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
+
+    assert result["status"] == "success"
+    assert result["videos_processed"] == 0
+    logs = (await db_session.execute(select(FetchLog))).scalars().all()
+    assert len(logs) == 0, "空跑不應寫 FetchLog"
+    mock_yt.get_video_details.assert_not_called()

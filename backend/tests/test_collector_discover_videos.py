@@ -238,8 +238,8 @@ async def test_discover_filters_by_schedule_hour(db_session):
 
 
 @pytest.mark.asyncio
-async def test_discover_updates_channel_schedule_hour(db_session):
-    """After finding new videos, channel.schedule_hour = (max published_at hour + 1) % 24."""
+async def test_discover_does_not_update_channel_schedule_hour(db_session):
+    """discover_videos 找到新影片後，channel.schedule_hour 不應改變（由 channel_snapshot 負責更新）。"""
     ch = await _add_active_channel(db_session, "UC_update_hour", uploads_playlist_id="PL_update_hour", schedule_hour=11)
 
     mock_yt = MagicMock()
@@ -247,7 +247,7 @@ async def test_discover_updates_channel_schedule_hour(db_session):
     mock_yt.get_video_details = AsyncMock(return_value=[{
         "youtube_video_id": "vid_a",
         "title": "A", "description": "",
-        "published_at": datetime(2026, 3, 20, 6, 30, tzinfo=timezone.utc),  # UTC 06:30 = Taipei 14:30, hour 14
+        "published_at": datetime(2026, 3, 20, 6, 30, tzinfo=timezone.utc),  # UTC 06:30 = Taipei 14:30
         "duration": "PT1M", "tags": [], "topic_categories": [],
         "view_count": 0, "like_count": 0, "comment_count": 0,
     }])
@@ -256,7 +256,7 @@ async def test_discover_updates_channel_schedule_hour(db_session):
         await run_discover_videos_job(db_session, mock_yt, current_hour=11)
 
     await db_session.refresh(ch)
-    assert ch.schedule_hour == 15  # (14 + 1) % 24
+    assert ch.schedule_hour == 11  # 不應被 discover 改變
 
 
 @pytest.mark.asyncio

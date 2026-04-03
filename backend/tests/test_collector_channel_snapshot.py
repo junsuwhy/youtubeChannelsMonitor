@@ -1,11 +1,12 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import date
+from datetime import date, datetime, timezone
 from sqlalchemy import select
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.channel_snapshot import ChannelSnapshot
 from youtube_monitor.models.fetch_log import FetchLog
+from youtube_monitor.models.video import Video
 from youtube_monitor.collector.jobs.channel_snapshot import run_channel_snapshot_job
 from youtube_monitor.collector.youtube_client import QuotaExceededException
 
@@ -48,16 +49,13 @@ async def _add_active_channel(
 
 
 async def test_snapshot_job_empty_channels(db_session):
-    """No active channels in DB → job completes, writes 1 fetch_log with channels_processed=0."""
+    """No active channels in DB → job returns success with 0 processed, writes NO FetchLog."""
     mock_client = MagicMock()
 
     result = await run_channel_snapshot_job(db_session, mock_client, current_hour=6)
 
     logs = (await db_session.execute(select(FetchLog))).scalars().all()
-    assert len(logs) == 1
-    assert logs[0].channels_processed == 0
-    assert logs[0].status == "success"
-    assert logs[0].job_name == "channel_snapshot"
+    assert len(logs) == 0, "Empty run should not write FetchLog"
     assert result["status"] == "success"
     assert result["channels_processed"] == 0
 
@@ -230,3 +228,85 @@ async def test_channel_snapshot_filters_by_schedule_hour(db_session):
 
     assert result["channels_processed"] == 1
     mock_yt.get_channel_info.assert_called_once_with("UC_snap_match")
+
+
+@pytest.mark.asyncio
+async def test_channel_snapshot_updates_schedule_hour(db_session):
+    """channel_snapshot 執行後，channel.schedule_hour 應依最新影片台北時間 +1 更新。"""
+    channel = Channel(
+        youtube_channel_id="UC_sched_update", channel_name="SchedUpdate",
+        status="active", source="manual", schedule_hour=6,
+    )
+    db_session.add(channel)
+    await db_session.commit()
+    result = await db_session.execute(
+        select(Channel).where(Channel.youtube_channel_id == "UC_sched_update")
+    )
+    channel = result.scalar_one()
+
+    # 插入一支影片：UTC 12:00 = 台北 20:00，期望 schedule_hour = (20+1)%24 = 21
+    video = Video(
+        youtube_video_id="sched_vid_01",
+        channel_id=channel.id,
+        title="Sched Video",
+        published_at=datetime(2026, 3, 20, 12, 0, tzinfo=timezone.utc),
+        status="public",
+        schedule_hour=6,
+    )
+    db_session.add(video)
+    await db_session.commit()
+
+    mock_yt = MagicMock()
+    mock_yt.get_channel_info = AsyncMock(return_value={
+        "channel_name": "SchedUpdate", "subscriber_count": 100,
+        "view_count": 500, "video_count": 1,
+        "description": None, "thumbnail_url": None, "country": None, "custom_url": None,
+    })
+
+    with patch("youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
+               return_value=date(2026, 3, 20)):
+        await run_channel_snapshot_job(db_session, mock_yt, current_hour=6)
+
+    await db_session.refresh(channel)
+    assert channel.schedule_hour == 21  # (12 UTC + 8 = 20 Taipei, +1 = 21)
+
+
+@pytest.mark.asyncio
+async def test_channel_snapshot_schedule_hour_wraps(db_session):
+    """台北時間 23:xx 的影片，schedule_hour 應 wrap 成 0。"""
+    channel = Channel(
+        youtube_channel_id="UC_sched_wrap", channel_name="SchedWrap",
+        status="active", source="manual", schedule_hour=6,
+    )
+    db_session.add(channel)
+    await db_session.commit()
+    result = await db_session.execute(
+        select(Channel).where(Channel.youtube_channel_id == "UC_sched_wrap")
+    )
+    channel = result.scalar_one()
+
+    # UTC 15:30 = 台北 23:30，(23+1)%24 = 0
+    video = Video(
+        youtube_video_id="sched_wrap_vid",
+        channel_id=channel.id,
+        title="Wrap Video",
+        published_at=datetime(2026, 3, 20, 15, 30, tzinfo=timezone.utc),
+        status="public",
+        schedule_hour=6,
+    )
+    db_session.add(video)
+    await db_session.commit()
+
+    mock_yt = MagicMock()
+    mock_yt.get_channel_info = AsyncMock(return_value={
+        "channel_name": "SchedWrap", "subscriber_count": 50,
+        "view_count": 200, "video_count": 1,
+        "description": None, "thumbnail_url": None, "country": None, "custom_url": None,
+    })
+
+    with patch("youtube_monitor.collector.jobs.channel_snapshot.get_taipei_date",
+               return_value=date(2026, 3, 20)):
+        await run_channel_snapshot_job(db_session, mock_yt, current_hour=6)
+
+    await db_session.refresh(channel)
+    assert channel.schedule_hour == 0  # (23+1) % 24

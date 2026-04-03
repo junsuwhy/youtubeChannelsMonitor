@@ -67,19 +67,6 @@ async def run_video_snapshot_job(
     videos_to_snapshot = result.scalars().all()
 
     if not videos_to_snapshot:
-        fetch_log = FetchLog(
-            job_name="video_snapshot",
-            channel_id=channel_id,
-            status="success",
-            channels_processed=0,
-            videos_processed=0,
-            api_units_used=0,
-            error_message=None,
-            started_at=started_at,
-            finished_at=datetime.now(timezone.utc),
-        )
-        session.add(fetch_log)
-        await session.commit()
         return {"status": "success", "videos_processed": 0, "api_units_used": 0}
 
     # Build lookup: youtube_video_id → Video object
