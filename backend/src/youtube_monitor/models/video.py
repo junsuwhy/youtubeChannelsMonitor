@@ -28,6 +28,7 @@ class Video(Base):
     rapid_tracking_until: Mapped[Optional[datetime.date]] = mapped_column(
         Date, nullable=True
     )
+    schedule_hour: Mapped[int] = mapped_column(Integer, default=8, nullable=False, server_default="8")
     created_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, server_default=func.now(), nullable=True
     )

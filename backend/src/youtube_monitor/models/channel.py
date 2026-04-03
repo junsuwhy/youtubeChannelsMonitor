@@ -22,6 +22,7 @@ class Channel(Base):
     uploads_playlist_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)
     source: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
+    schedule_hour: Mapped[int] = mapped_column(Integer, default=6, nullable=False, server_default="6")
     created_at: Mapped[Optional[Any]] = mapped_column(
         DateTime, server_default=func.now(), nullable=True
     )

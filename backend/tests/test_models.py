@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from youtube_monitor.models import Base, Channel
 from youtube_monitor.models.base import Base as BaseClass
+from youtube_monitor.models.video import Video
 from sqlalchemy.ext.asyncio import AsyncAttrs
 
 
@@ -134,3 +135,24 @@ async def test_json_field_roundtrip(session):
 async def test_base_has_async_attrs():
     """Assert that Base inherits from AsyncAttrs."""
     assert issubclass(BaseClass, AsyncAttrs), "Base should inherit from AsyncAttrs"
+
+
+async def test_channel_has_schedule_hour(session):
+    ch = Channel(youtube_channel_id="UC_schedule_ch", status="active", source="manual")
+    session.add(ch)
+    await session.commit()
+    await session.refresh(ch)
+    assert ch.schedule_hour == 6
+
+
+async def test_video_has_schedule_hour(session):
+    channel = Channel(youtube_channel_id="UC_schedule_vid", status="active", source="manual")
+    session.add(channel)
+    await session.commit()
+    await session.refresh(channel)
+
+    v = Video(youtube_video_id="abc1234", channel_id=channel.id, status="public")
+    session.add(v)
+    await session.commit()
+    await session.refresh(v)
+    assert v.schedule_hour == 8
