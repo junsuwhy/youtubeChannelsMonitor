@@ -36,17 +36,23 @@ async def lifespan(app: FastAPI):
     # Run migrations
     await run_migrations()
 
-    # Start scheduler
+    # Start scheduler (can be disabled via ENABLE_SCHEDULER=false)
     from youtube_monitor.collector.scheduler import create_scheduler
     from youtube_monitor.collector.youtube_client import YouTubeClient
 
     youtube_client = YouTubeClient(api_key=settings.youtube_api_key)
-    scheduler = create_scheduler(AsyncSessionLocal, youtube_client)
-    scheduler.start()
+    scheduler = None
+    if settings.enable_scheduler:
+        scheduler = create_scheduler(AsyncSessionLocal, youtube_client)
+        scheduler.start()
+    else:
+        import logging
+        logging.getLogger(__name__).info("Scheduler disabled via ENABLE_SCHEDULER=false")
 
     yield
 
-    scheduler.shutdown(wait=False)
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="YouTube Monitor API", lifespan=lifespan)
