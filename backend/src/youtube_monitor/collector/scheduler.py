@@ -48,8 +48,11 @@ async def _video_snapshot_wrapper(session_factory, youtube_client):
 async def trigger_all_jobs():
     """Immediately run all collector jobs sequentially (channel → discover → video).
     Called by the /system/fetch/trigger API endpoint after quota check."""
-    session_factory = _trigger_state["session_factory"]
-    youtube_client = _trigger_state["youtube_client"]
+    session_factory = _trigger_state.get("session_factory")
+    youtube_client = _trigger_state.get("youtube_client")
+    if session_factory is None or youtube_client is None:
+        logger.warning("trigger_all_jobs called before scheduler was initialised — skipping")
+        return
     await _channel_snapshot_wrapper(session_factory, youtube_client)
     await _discover_videos_wrapper(session_factory, youtube_client)
     await _video_snapshot_wrapper(session_factory, youtube_client)

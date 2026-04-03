@@ -83,10 +83,12 @@ python -m youtube_monitor.management.create_user --username admin --password <pw
 ## Scheduled Jobs (Taipei time)
 | Job | Time | Quota cost |
 |---|---|---|
-| `channel_snapshot` | 04:00 | ~N channels × 1 unit |
-| `discover_videos` | 06:00 | ~N channels × ≤4 pages × 1 unit |
-| `video_snapshot` | 08:00 | varies (3-tier sampling) |
-| WAL checkpoint | every hour | 0 |
+| `discover_videos` | every hour at :10 | ~channels_in_slot × ≤4 pages × 1 unit |
+| `video_snapshot` | every hour at :30 | ~videos_in_slot ÷ 50 units |
+| `channel_snapshot` | every hour at :50 | ~channels_in_slot × 1 unit |
+| WAL checkpoint | every hour at :00 | 0 |
+
+Each channel and video is assigned a `schedule_hour` (0–23, Taipei). Jobs process only rows matching the current hour. `discover_videos` updates `schedule_hour` when new videos are found.
 
 Daily quota limit: **10,000 units**.
 

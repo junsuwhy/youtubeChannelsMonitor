@@ -1,7 +1,15 @@
+import pytest
 from unittest.mock import MagicMock
 from apscheduler.triggers.cron import CronTrigger
 
-from youtube_monitor.collector.scheduler import create_scheduler
+from youtube_monitor.collector.scheduler import create_scheduler, _trigger_state
+
+
+@pytest.fixture(autouse=True)
+def reset_trigger_state():
+    """Reset scheduler global state after each test to avoid cross-test pollution."""
+    yield
+    _trigger_state.clear()
 
 
 def _get_job(scheduler, job_id):
