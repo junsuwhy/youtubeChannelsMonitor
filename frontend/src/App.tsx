@@ -11,6 +11,7 @@ import ChannelImportPage from "./pages/ChannelImportPage";
 import VideoListPage from "./pages/VideoListPage";
 import VideoDetailPage from "@/pages/VideoDetailPage";
 import MiscPage from "@/pages/MiscPage";
+import UsersPage from "@/pages/UsersPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
       { path: "videos", element: <VideoListPage /> },
       { path: "videos/:id", element: <VideoDetailPage /> },
       { path: "misc", element: <MiscPage /> },
+      { path: "users", element: <ProtectedRoute requiredRole="user_admin"><UsersPage /></ProtectedRoute> },
     ],
   },
   { path: "*", element: <Navigate to="/" replace /> },
