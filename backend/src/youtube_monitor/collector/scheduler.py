@@ -57,28 +57,28 @@ def create_scheduler(session_factory, youtube_client) -> AsyncIOScheduler:
     _trigger_state["youtube_client"] = youtube_client
     scheduler = AsyncIOScheduler(timezone=TAIPEI_TZ)
 
-    # Channel snapshot: daily at 04:00 Taipei
+    # Channel snapshot: every hour at :50 Taipei
     scheduler.add_job(
         _channel_snapshot_wrapper,
-        CronTrigger(hour=4, minute=0, timezone=TAIPEI_TZ),
+        CronTrigger(minute=50, timezone=TAIPEI_TZ),
         id="channel_snapshot",
-        max_instances=1,  # MANDATORY: prevents SQLite lock contention
+        max_instances=1,
         misfire_grace_time=3600,
         kwargs={"session_factory": session_factory, "youtube_client": youtube_client},
     )
-    # Video discovery: daily at 06:00 Taipei
+    # Video discovery: every hour at :10 Taipei
     scheduler.add_job(
         _discover_videos_wrapper,
-        CronTrigger(hour=6, minute=0, timezone=TAIPEI_TZ),
+        CronTrigger(minute=10, timezone=TAIPEI_TZ),
         id="discover_videos",
         max_instances=1,
         misfire_grace_time=3600,
         kwargs={"session_factory": session_factory, "youtube_client": youtube_client},
     )
-    # Video snapshot: daily at 08:00 Taipei
+    # Video snapshot: every hour at :30 Taipei
     scheduler.add_job(
         _video_snapshot_wrapper,
-        CronTrigger(hour=8, minute=0, timezone=TAIPEI_TZ),
+        CronTrigger(minute=30, timezone=TAIPEI_TZ),
         id="video_snapshot",
         max_instances=1,
         misfire_grace_time=3600,
