@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date, datetime, timezone
 from sqlalchemy import select
@@ -39,6 +40,7 @@ async def _add_video(
     published_at: datetime,
     rapid_tracking_until=None,
     status: str = "public",
+    schedule_hour: int = 8,
 ) -> Video:
     video = Video(
         youtube_video_id=youtube_video_id,
@@ -47,6 +49,7 @@ async def _add_video(
         published_at=published_at,
         status=status,
         rapid_tracking_until=rapid_tracking_until,
+        schedule_hour=schedule_hour,
     )
     session.add(video)
     await session.commit()
@@ -91,7 +94,7 @@ async def test_video_snapshot_success(db_session):
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        result = await run_video_snapshot_job(db_session, mock_client)
+        result = await run_video_snapshot_job(db_session, mock_client, current_hour=8)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 5
@@ -126,13 +129,13 @@ async def test_video_snapshot_idempotent(db_session):
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        await run_video_snapshot_job(db_session, make_client())
+        await run_video_snapshot_job(db_session, make_client(), current_hour=8)
 
     with patch(
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        await run_video_snapshot_job(db_session, make_client())
+        await run_video_snapshot_job(db_session, make_client(), current_hour=8)
 
     snapshots = (await db_session.execute(select(VideoSnapshot))).scalars().all()
     assert len(snapshots) == 5, (
@@ -163,7 +166,7 @@ async def test_video_gone_private(db_session):
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        result = await run_video_snapshot_job(db_session, mock_client)
+        result = await run_video_snapshot_job(db_session, mock_client, current_hour=8)
 
     assert result["status"] == "success"
 
@@ -209,7 +212,7 @@ async def test_video_rapid_tracking_included(db_session):
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        result = await run_video_snapshot_job(db_session, mock_client)
+        result = await run_video_snapshot_job(db_session, mock_client, current_hour=8)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 1
@@ -225,31 +228,12 @@ async def test_video_rapid_tracking_included(db_session):
     assert snapshots[0].video_id == rapid_video.id
 
 
-async def test_video_downsampling(db_session):
-    """Tier C video (published 60 days ago) that already has a snapshot this week → NOT included."""
+async def test_video_private_excluded(db_session):
+    """Videos with status='private' are not included in the snapshot batch."""
     channel = await _add_channel(db_session)
 
-    # Old video (Tier C: > 30 days)
-    old_dt = datetime(2026, 1, 19, tzinfo=timezone.utc)  # ~60 days before TODAY
-    old_video = await _add_video(
-        db_session,
-        channel.id,
-        "old_vid1",
-        published_at=old_dt,
-        rapid_tracking_until=None,
-    )
-
-    # Pre-insert a VideoSnapshot from 2 days ago (within the same ISO week as TODAY)
-    # TODAY = 2026-03-20 (Friday), week starts 2026-03-16 (Monday)
-    snapshot_in_week = VideoSnapshot(
-        video_id=old_video.id,
-        snapshot_date=date(2026, 3, 18),  # Wednesday of same week
-        view_count=900,
-        like_count=40,
-        comment_count=5,
-    )
-    db_session.add(snapshot_in_week)
-    await db_session.commit()
+    recent_dt = datetime(2026, 3, 10, tzinfo=timezone.utc)
+    await _add_video(db_session, channel.id, "priv_vid1", published_at=recent_dt, status="private", schedule_hour=8)
 
     mock_client = MagicMock()
     mock_client.get_video_details = AsyncMock(return_value=[])
@@ -258,14 +242,53 @@ async def test_video_downsampling(db_session):
         "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
         return_value=TODAY,
     ):
-        result = await run_video_snapshot_job(db_session, mock_client)
+        result = await run_video_snapshot_job(db_session, mock_client, current_hour=8)
 
     assert result["status"] == "success"
 
-    # get_video_details should NOT have been called (no videos to snapshot)
+    # get_video_details should NOT have been called (no public videos)
     mock_client.get_video_details.assert_not_called()
 
-    # Still only 1 snapshot (the pre-inserted one)
-    snapshots = (await db_session.execute(select(VideoSnapshot))).scalars().all()
-    assert len(snapshots) == 1
-    assert snapshots[0].snapshot_date == date(2026, 3, 18)
+
+@pytest.mark.asyncio
+async def test_video_snapshot_filters_by_schedule_hour(db_session):
+    """Only videos with matching schedule_hour are snapshotted."""
+    channel = await _add_channel(db_session)
+    v_match = await _add_video(
+        db_session, channel.id, "vid_match",
+        published_at=datetime(2026, 3, 20, 10, 0, tzinfo=timezone.utc),
+        schedule_hour=8,
+    )
+    v_skip = await _add_video(
+        db_session, channel.id, "vid_skip",
+        published_at=datetime(2026, 3, 20, 5, 0, tzinfo=timezone.utc),
+        schedule_hour=3,
+    )
+
+    mock_yt = MagicMock()
+    mock_yt.get_video_details = AsyncMock(return_value=[make_video_detail("vid_match")])
+
+    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+        result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
+
+    assert result["videos_processed"] == 1
+    mock_yt.get_video_details.assert_called_once_with(["vid_match"])
+
+
+@pytest.mark.asyncio
+async def test_video_snapshot_no_tier_logic(db_session):
+    """All public videos with matching schedule_hour are included regardless of age."""
+    channel = await _add_channel(db_session)
+    old_video = await _add_video(
+        db_session, channel.id, "vid_old",
+        published_at=datetime(2020, 1, 1, 7, 0, tzinfo=timezone.utc),
+        schedule_hour=8,
+    )
+
+    mock_yt = MagicMock()
+    mock_yt.get_video_details = AsyncMock(return_value=[make_video_detail("vid_old")])
+
+    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+        result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
+
+    assert result["videos_processed"] == 1

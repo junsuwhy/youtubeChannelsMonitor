@@ -1,6 +1,7 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from collections import defaultdict
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -16,26 +17,28 @@ from youtube_monitor.collector.utils import get_taipei_date
 
 logger = logging.getLogger(__name__)
 
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
+
 
 async def run_video_snapshot_job(
     session: AsyncSession,
     youtube_client: YouTubeClient,
     channel_id: int | None = None,
+    current_hour: int | None = None,
 ) -> dict:
     """
-    Daily video statistics snapshot job (runs at 08:00 Taipei time).
+    Hourly video statistics snapshot job.
 
     Args:
         session: Async SQLAlchemy session.
         youtube_client: YouTube API client.
         channel_id: If provided, only snapshot videos belonging to this channel DB id.
                     If None (default), all eligible videos are processed.
+        current_hour: Taipei hour used to filter videos by schedule_hour.
+                      Defaults to the current Taipei hour.
 
     Flow:
-    1. Query videos to snapshot using 3-tier strategy:
-       Tier A: rapid_tracking_until >= today  → ALWAYS include
-       Tier B: published_at >= today - 30 days AND rapid_tracking_until is null or < today → daily update
-       Tier C: published_at < today - 30 days → downsampled: skip if already has a VideoSnapshot this ISO week
+    1. Query public videos where schedule_hour == current_hour
     2. Batch video IDs into groups of 50
     3. Call youtube_client.get_video_details(batch) for each batch
     4. Videos missing from API response → set status='private'
@@ -45,72 +48,23 @@ async def run_video_snapshot_job(
 
     Returns: dict with job stats
     """
+    if current_hour is None:
+        current_hour = datetime.now(TAIPEI_TZ).hour
+
     started_at = datetime.now(timezone.utc)
     today = get_taipei_date()
     videos_processed = 0
     api_units_used = 0
 
-    # --- Tier A: rapid_tracking_until >= today (always include) ---
-    tier_a_query = select(Video).where(
-        Video.rapid_tracking_until >= today,
+    query = select(Video).where(
+        Video.schedule_hour == current_hour,
         Video.status == "public",
     )
     if channel_id is not None:
-        tier_a_query = tier_a_query.where(Video.channel_id == channel_id)
-    tier_a_result = await session.execute(tier_a_query)
-    tier_a_videos = tier_a_result.scalars().all()
+        query = query.where(Video.channel_id == channel_id)
 
-    # --- Tier B: published within last 30 days, not on rapid tracking ---
-    cutoff_30 = today - timedelta(days=30)
-    tier_b_query = select(Video).where(
-        Video.published_at
-        >= datetime(
-            cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc
-        ),
-        (Video.rapid_tracking_until == None) | (Video.rapid_tracking_until < today),  # noqa: E711
-        Video.status == "public",
-    )
-    if channel_id is not None:
-        tier_b_query = tier_b_query.where(Video.channel_id == channel_id)
-    tier_b_result = await session.execute(tier_b_query)
-    tier_b_videos = tier_b_result.scalars().all()
-
-    # --- Tier C: published > 30 days ago — downsample: skip if already has snapshot this ISO week ---
-    tier_c_query = select(Video).where(
-        Video.published_at
-        < datetime(cutoff_30.year, cutoff_30.month, cutoff_30.day, tzinfo=timezone.utc),
-        Video.status == "public",
-    )
-    if channel_id is not None:
-        tier_c_query = tier_c_query.where(Video.channel_id == channel_id)
-    tier_c_result = await session.execute(tier_c_query)
-    tier_c_all = tier_c_result.scalars().all()
-
-    # Downsampling: only include Tier C videos that don't have a snapshot this ISO calendar week
-    week_start = today - timedelta(days=today.weekday())
-    tier_c_videos = []
-    for video in tier_c_all:
-        existing = await session.execute(
-            select(VideoSnapshot).where(
-                VideoSnapshot.video_id == video.id,
-                VideoSnapshot.snapshot_date >= week_start,
-            )
-        )
-        if existing.scalar():
-            logger.debug(
-                "Skipping video %s (Tier C: already snapshotted this week)",
-                video.youtube_video_id,
-            )
-            continue
-        tier_c_videos.append(video)
-
-    # Combine all tiers, deduplicate by video id
-    seen_ids = set()
-    videos_to_snapshot = []
-    for video in tier_a_videos + tier_b_videos + tier_c_videos:
-        if video.id not in seen_ids:
-            seen_ids.add(video.id)
-            videos_to_snapshot.append(video)
+    result = await session.execute(query)
+    videos_to_snapshot = result.scalars().all()
 
     if not videos_to_snapshot:
         fetch_log = FetchLog(
