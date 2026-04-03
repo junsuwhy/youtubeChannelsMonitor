@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -15,12 +16,14 @@ from youtube_monitor.collector.youtube_client import (
 from youtube_monitor.collector.utils import get_taipei_date
 
 logger = logging.getLogger(__name__)
+TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
 
 async def run_discover_videos_job(
     session: AsyncSession,
     youtube_client: YouTubeClient,
     channel_id: int | None = None,
+    current_hour: int | None = None,
 ) -> dict:
     """
     Daily video discovery job (runs at 06:00 Taipei time).
@@ -45,12 +48,18 @@ async def run_discover_videos_job(
 
     Returns: dict with job stats
     """
+    if current_hour is None:
+        current_hour = datetime.now(TAIPEI_TZ).hour
+
     started_at = datetime.now(timezone.utc)
     today = get_taipei_date()
     total_videos_processed = 0
     api_units_used = 0
 
-    query = select(Channel).where(Channel.status == "active")
+    query = select(Channel).where(
+        Channel.status == "active",
+        Channel.schedule_hour == current_hour,
+    )
     if channel_id is not None:
         query = query.where(Channel.id == channel_id)
     result = await session.execute(query)
@@ -132,21 +141,25 @@ async def run_discover_videos_job(
                             api_units_used += detail_units
 
                             # Step 5: Upsert new videos and create initial VideoSnapshot
-                            rapid_until = today + timedelta(days=7)
                             crawled_at = datetime.now(timezone.utc)
                             for video_data in video_details:
                                 yt_video_id = video_data["youtube_video_id"]
+                                pub_at = video_data.get("published_at")
+                                video_schedule_hour = (
+                                    (pub_at.astimezone(TAIPEI_TZ).hour + 1) % 24 if pub_at else current_hour
+                                )
                                 stmt = sqlite_insert(Video).values(
                                     youtube_video_id=yt_video_id,
                                     channel_id=channel.id,
                                     title=video_data.get("title"),
                                     description=video_data.get("description"),
-                                    published_at=video_data.get("published_at"),
+                                    published_at=pub_at,
                                     duration=video_data.get("duration"),
                                     tags=video_data.get("tags"),
                                     topic_categories=video_data.get("topic_categories"),
                                     status="public",
-                                    rapid_tracking_until=rapid_until,
+                                    schedule_hour=video_schedule_hour,
+                                    # rapid_tracking_until intentionally omitted
                                 )
                                 stmt = stmt.on_conflict_do_update(
                                     index_elements=["youtube_video_id"],
@@ -158,7 +171,7 @@ async def run_discover_videos_job(
                                         "tags": stmt.excluded.tags,
                                         "topic_categories": stmt.excluded.topic_categories,
                                         "status": stmt.excluded.status,
-                                        "rapid_tracking_until": stmt.excluded.rapid_tracking_until,
+                                        "schedule_hour": stmt.excluded.schedule_hour,
                                     },
                                 )
                                 await session.execute(stmt)
@@ -186,6 +199,19 @@ async def run_discover_videos_job(
                                     },
                                 )
                                 await session.execute(snap_stmt)
+
+                            # Update channel.schedule_hour based on latest video
+                            max_hour = max(
+                                v.get("published_at").astimezone(TAIPEI_TZ).hour
+                                for v in video_details
+                                if v.get("published_at")
+                            )
+                            new_schedule_hour = (max_hour + 1) % 24
+                            await session.execute(
+                                update(Channel)
+                                .where(Channel.id == channel.id)
+                                .values(schedule_hour=new_schedule_hour)
+                            )
 
                             ch_videos += len(video_details)
                             total_videos_processed += len(video_details)

@@ -1,3 +1,4 @@
+import pytest
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import select
@@ -16,6 +17,7 @@ async def _add_active_channel(
     youtube_channel_id: str,
     name: str = "Channel",
     uploads_playlist_id: str = None,
+    schedule_hour: int = 6,
 ) -> Channel:
     """Insert an active channel and return it."""
     channel = Channel(
@@ -24,6 +26,7 @@ async def _add_active_channel(
         status="active",
         source="manual",
         uploads_playlist_id=uploads_playlist_id,
+        schedule_hour=schedule_hour,
     )
     session.add(channel)
     await session.commit()
@@ -67,7 +70,7 @@ async def test_discover_new_videos(db_session):
     mock_client.get_video_details = AsyncMock(return_value=make_video_details(new_ids))
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
-        result = await run_discover_videos_job(db_session, mock_client)
+        result = await run_discover_videos_job(db_session, mock_client, current_hour=6)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 10
@@ -75,9 +78,7 @@ async def test_discover_new_videos(db_session):
     videos = (await db_session.execute(select(Video))).scalars().all()
     assert len(videos) == 10
 
-    expected_rapid_until = date(2026, 3, 27)  # KNOWN_DATE + 7
     for video in videos:
-        assert video.rapid_tracking_until == expected_rapid_until
         assert video.channel_id == channel.id
         assert video.status == "public"
 
@@ -118,7 +119,7 @@ async def test_discover_no_new_videos(db_session):
     mock_client.get_video_details = AsyncMock(return_value=[])
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
-        result = await run_discover_videos_job(db_session, mock_client)
+        result = await run_discover_videos_job(db_session, mock_client, current_hour=6)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 0
@@ -141,7 +142,7 @@ async def test_discover_empty_playlist(db_session):
     mock_client.get_video_details = AsyncMock(return_value=[])
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
-        result = await run_discover_videos_job(db_session, mock_client)
+        result = await run_discover_videos_job(db_session, mock_client, current_hour=6)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 0
@@ -170,7 +171,7 @@ async def test_discover_caps_at_200_videos(db_session):
     )
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
-        result = await run_discover_videos_job(db_session, mock_client)
+        result = await run_discover_videos_job(db_session, mock_client, current_hour=6)
 
     assert result["status"] == "success"
     assert result["videos_processed"] == 200
@@ -202,10 +203,80 @@ async def test_rapid_tracking_set(db_session):
 
     known_date = date(2026, 3, 15)
     with patch(PATCH_TARGET, return_value=known_date):
-        await run_discover_videos_job(db_session, mock_client)
+        await run_discover_videos_job(db_session, mock_client, current_hour=6)
 
     result = await db_session.execute(
         select(Video).where(Video.youtube_video_id == "newvideo12AB")
     )
     video = result.scalar_one()
-    assert video.rapid_tracking_until == date(2026, 3, 22)  # 2026-03-15 + 7 days
+    assert video is not None  # video was inserted
+
+
+@pytest.mark.asyncio
+async def test_discover_filters_by_schedule_hour(db_session):
+    """Only channels whose schedule_hour matches current_hour are processed."""
+    ch_match = await _add_active_channel(db_session, "UC_hour_match", uploads_playlist_id="PL_hour_match", schedule_hour=11)
+    ch_skip  = await _add_active_channel(db_session, "UC_hour_skip",  uploads_playlist_id="PL_hour_skip",  schedule_hour=5)
+
+    mock_yt = MagicMock()
+    mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_new"])
+    mock_yt.get_video_details = AsyncMock(return_value=[{
+        "youtube_video_id": "vid_new",
+        "title": "New",
+        "description": "",
+        "published_at": datetime(2026, 3, 20, 10, 5, tzinfo=timezone.utc),
+        "duration": "PT1M", "tags": [], "topic_categories": [],
+        "view_count": 0, "like_count": 0, "comment_count": 0,
+    }])
+
+    with patch(PATCH_TARGET, return_value=KNOWN_DATE):
+        await run_discover_videos_job(db_session, mock_yt, current_hour=11)
+
+    result = await db_session.execute(select(Video))
+    videos = result.scalars().all()
+    assert len(videos) == 1  # only ch_match was processed
+
+
+@pytest.mark.asyncio
+async def test_discover_updates_channel_schedule_hour(db_session):
+    """After finding new videos, channel.schedule_hour = (max published_at hour + 1) % 24."""
+    ch = await _add_active_channel(db_session, "UC_update_hour", uploads_playlist_id="PL_update_hour", schedule_hour=11)
+
+    mock_yt = MagicMock()
+    mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_a"])
+    mock_yt.get_video_details = AsyncMock(return_value=[{
+        "youtube_video_id": "vid_a",
+        "title": "A", "description": "",
+        "published_at": datetime(2026, 3, 20, 6, 30, tzinfo=timezone.utc),  # UTC 06:30 = Taipei 14:30, hour 14
+        "duration": "PT1M", "tags": [], "topic_categories": [],
+        "view_count": 0, "like_count": 0, "comment_count": 0,
+    }])
+
+    with patch(PATCH_TARGET, return_value=KNOWN_DATE):
+        await run_discover_videos_job(db_session, mock_yt, current_hour=11)
+
+    await db_session.refresh(ch)
+    assert ch.schedule_hour == 15  # (14 + 1) % 24
+
+
+@pytest.mark.asyncio
+async def test_discover_sets_video_schedule_hour(db_session):
+    """New videos get schedule_hour = (published_at.hour + 1) % 24."""
+    await _add_active_channel(db_session, "UC_vid_hour", uploads_playlist_id="PL_vid_hour", schedule_hour=11)
+
+    mock_yt = MagicMock()
+    mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_b"])
+    mock_yt.get_video_details = AsyncMock(return_value=[{
+        "youtube_video_id": "vid_b",
+        "title": "B", "description": "",
+        "published_at": datetime(2026, 3, 20, 15, 0, tzinfo=timezone.utc),  # UTC 15:00 = Taipei 23:00, hour 23 → wraps to 0
+        "duration": "PT1M", "tags": [], "topic_categories": [],
+        "view_count": 0, "like_count": 0, "comment_count": 0,
+    }])
+
+    with patch(PATCH_TARGET, return_value=KNOWN_DATE):
+        await run_discover_videos_job(db_session, mock_yt, current_hour=11)
+
+    result = await db_session.execute(select(Video).where(Video.youtube_video_id == "vid_b"))
+    video = result.scalar_one()
+    assert video.schedule_hour == 0  # (23 + 1) % 24

@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -31,8 +32,9 @@ async def _channel_snapshot_wrapper(session_factory, youtube_client):
 
 async def _discover_videos_wrapper(session_factory, youtube_client):
     """Wrapper that opens a session and runs the discover videos job."""
+    current_hour = datetime.now(TAIPEI_TZ).hour
     async with session_factory() as session:
-        await run_discover_videos_job(session, youtube_client)
+        await run_discover_videos_job(session, youtube_client, current_hour=current_hour)
 
 
 async def _video_snapshot_wrapper(session_factory, youtube_client):
