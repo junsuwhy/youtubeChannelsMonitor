@@ -150,6 +150,8 @@ async def run_channel_snapshot_job(
                     )
                     latest_pub = latest_pub_result.scalar()
                     if latest_pub:
+                        if latest_pub.tzinfo is None:
+                            latest_pub = latest_pub.replace(tzinfo=timezone.utc)
                         new_hour = (latest_pub.astimezone(TAIPEI_TZ).hour + 1) % 24
                         await session.execute(
                             update(Channel)
