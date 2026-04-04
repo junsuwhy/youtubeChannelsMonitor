@@ -25,3 +25,8 @@ class FetchLog(Base):
     finished_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime, nullable=True
     )
+    input_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    output_payload: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_ids: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON array string, e.g. '["vid1","vid2"]'
