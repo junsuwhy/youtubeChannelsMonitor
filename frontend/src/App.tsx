@@ -12,6 +12,8 @@ import VideoListPage from "./pages/VideoListPage";
 import VideoDetailPage from "@/pages/VideoDetailPage";
 import MiscPage from "@/pages/MiscPage";
 import UsersPage from "@/pages/UsersPage";
+import FetchLogsPage from "@/pages/FetchLogsPage";
+import FetchLogDetailPage from "@/pages/FetchLogDetailPage";
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -25,6 +27,8 @@ const router = createBrowserRouter([
       { path: "channels/:id", element: <ChannelDetailPage /> },
       { path: "videos", element: <VideoListPage /> },
       { path: "videos/:id", element: <VideoDetailPage /> },
+      { path: "fetch-logs", element: <FetchLogsPage /> },
+      { path: "fetch-logs/:id", element: <FetchLogDetailPage /> },
       { path: "misc", element: <MiscPage /> },
       { path: "users", element: <ProtectedRoute requiredRole="user_admin"><UsersPage /></ProtectedRoute> },
     ],

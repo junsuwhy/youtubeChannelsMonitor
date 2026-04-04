@@ -9,6 +9,7 @@ export function Layout() {
     { to: "/", label: "Dashboard" },
     { to: "/channels", label: "Channels" },
     { to: "/videos", label: "Videos" },
+    { to: "/fetch-logs", label: "爬取紀錄" },
     { to: "/misc", label: "其他" },
     ...(canManageUsers ? [{ to: "/users", label: "使用者管理" }] : []),
   ];
