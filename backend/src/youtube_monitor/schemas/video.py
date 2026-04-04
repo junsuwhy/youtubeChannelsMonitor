@@ -23,6 +23,13 @@ class VideoResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("published_at", "created_at", mode="after")
+    @classmethod
+    def ensure_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+
 
 class VideoListResponse(BaseModel):
     items: List[VideoResponse]

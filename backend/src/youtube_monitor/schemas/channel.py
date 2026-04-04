@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, field_validator
+from datetime import datetime, timezone
 from typing import Optional, Any, List
 
 
@@ -36,6 +36,13 @@ class ChannelResponse(BaseModel):
     total_view_count: Optional[int] = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("created_at", "updated_at", mode="after")
+    @classmethod
+    def ensure_utc(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
 
 class ChannelListResponse(BaseModel):
