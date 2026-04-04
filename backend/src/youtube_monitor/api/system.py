@@ -9,6 +9,7 @@ from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.schemas.system import (
     QuotaResponse,
     FetchLogListResponse,
+    FetchLogDetailResponse,
     TriggerResponse,
 )
 
@@ -95,6 +96,19 @@ async def get_logs(
     logs = list(result.scalars().all())
 
     return FetchLogListResponse(items=logs, total=total or 0, page=page, limit=limit)
+
+
+@router.get("/system/logs/{log_id}", response_model=FetchLogDetailResponse)
+async def get_log_detail(
+    log_id: int,
+    db: AsyncSession = Depends(get_session),
+    current_user=Depends(get_current_user),
+):
+    result = await db.execute(select(FetchLog).where(FetchLog.id == log_id))
+    log = result.scalar_one_or_none()
+    if log is None:
+        raise HTTPException(status_code=404, detail="Log not found")
+    return log
 
 
 @router.post("/system/fetch/trigger", response_model=TriggerResponse)

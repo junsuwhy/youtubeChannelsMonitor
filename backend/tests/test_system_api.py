@@ -248,3 +248,69 @@ async def test_fetch_logs_no_status_filter_backward_compatible(api_client, db_se
     data = response.json()
     # Both logs should be returned
     assert data["total"] == 2
+
+
+async def test_get_fetch_log_detail_found(api_client_with_session):
+    """GET /system/logs/{id} returns 200 with payload fields for existing log."""
+    import json as _json
+
+    client, session = api_client_with_session
+
+    log = FetchLog(
+        job_name="video_snapshot",
+        status="success",
+        api_units_used=42,
+        input_payload='{"channel": "UC123"}',
+        output_payload='{"processed": 5}',
+        video_ids=_json.dumps(["abc123", "def456"]),
+    )
+    session.add(log)
+    await session.commit()
+    await session.refresh(log)
+    log_id = log.id
+
+    response = await client.get(f"/api/system/logs/{log_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == log_id
+    assert data["job_name"] == "video_snapshot"
+    assert data["status"] == "success"
+    assert data["api_units_used"] == 42
+    assert data["input_payload"] == '{"channel": "UC123"}'
+    assert data["output_payload"] == '{"processed": 5}'
+    assert data["video_ids"] == ["abc123", "def456"]
+
+
+async def test_get_fetch_log_detail_not_found(api_client):
+    """GET /system/logs/99999 returns 404 when log does not exist."""
+    response = await api_client.get("/api/system/logs/99999")
+    assert response.status_code == 404
+    data = response.json()
+    assert data["detail"] == "Log not found"
+
+
+async def test_get_fetch_logs_list_no_payload_leak(api_client_with_session):
+    """GET /system/logs list items do NOT expose input_payload or output_payload."""
+    import json as _json
+
+    client, session = api_client_with_session
+
+    log = FetchLog(
+        job_name="channel_snapshot",
+        status="success",
+        api_units_used=10,
+        input_payload='{"secret": "data"}',
+        output_payload='{"result": "ok"}',
+        video_ids=_json.dumps(["vid1"]),
+    )
+    session.add(log)
+    await session.commit()
+
+    response = await client.get("/api/system/logs")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) >= 1
+    for item in data["items"]:
+        assert "input_payload" not in item
+        assert "output_payload" not in item
+        assert "video_ids" not in item

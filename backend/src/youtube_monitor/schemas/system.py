@@ -1,3 +1,4 @@
+import json
 from pydantic import BaseModel, field_validator
 from datetime import datetime, date, timezone
 from typing import Optional, List
@@ -11,7 +12,7 @@ class QuotaResponse(BaseModel):
     percentage_used: float
 
 
-class FetchLogResponse(BaseModel):
+class FetchLogListItemResponse(BaseModel):
     id: int
     job_name: str
     channel_id: Optional[int] = None
@@ -33,8 +34,25 @@ class FetchLogResponse(BaseModel):
         return v
 
 
+class FetchLogDetailResponse(FetchLogListItemResponse):
+    input_payload: Optional[str] = None
+    output_payload: Optional[str] = None
+    video_ids: Optional[List[str]] = None
+
+    @field_validator("video_ids", mode="before")
+    @classmethod
+    def parse_video_ids(cls, v) -> Optional[List[str]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            return json.loads(v)
+        return v
+
+
 class FetchLogListResponse(BaseModel):
-    items: List[FetchLogResponse]
+    items: List[FetchLogListItemResponse]
     total: int
     page: int
     limit: int
