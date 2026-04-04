@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from collections import defaultdict
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,13 @@ from youtube_monitor.collector.youtube_client import (
 from youtube_monitor.collector.utils import get_taipei_date
 
 logger = logging.getLogger(__name__)
+
+
+class _DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super().default(obj)
 
 TAIPEI_TZ = ZoneInfo("Asia/Taipei")
 
@@ -149,7 +156,7 @@ async def run_video_snapshot_job(
                 input_payload=json.dumps(
                     {"video_ids": channel_video_ids.get(ch_id, [])}
                 ),
-                output_payload=json.dumps(channel_api_outputs.get(ch_id, [])),
+                output_payload=json.dumps(channel_api_outputs.get(ch_id, []), cls=_DateTimeEncoder),
                 video_ids=json.dumps(channel_video_ids.get(ch_id, [])),
             )
             session.add(ch_log)
