@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from collections import defaultdict
@@ -77,6 +78,8 @@ async def run_video_snapshot_job(
     channel_started_at: dict[int, datetime] = {
         v.channel_id: started_at for v in videos_to_snapshot
     }
+    channel_video_ids: dict[int, list[str]] = defaultdict(list)
+    channel_api_outputs: dict[int, list] = defaultdict(list)
 
     try:
         returned_youtube_ids: set[str] = set()
@@ -93,6 +96,9 @@ async def run_video_snapshot_job(
                 yt_id = detail["youtube_video_id"]
                 returned_youtube_ids.add(yt_id)
                 video = video_lookup[yt_id]
+
+                channel_video_ids[video.channel_id].append(yt_id)
+                channel_api_outputs[video.channel_id].append(detail)
 
                 # Upsert VideoSnapshot with crawled_at
                 stmt = sqlite_insert(VideoSnapshot).values(
@@ -140,6 +146,11 @@ async def run_video_snapshot_job(
                 error_message=None,
                 started_at=channel_started_at.get(ch_id, started_at),
                 finished_at=finished_at,
+                input_payload=json.dumps(
+                    {"video_ids": channel_video_ids.get(ch_id, [])}
+                ),
+                output_payload=json.dumps(channel_api_outputs.get(ch_id, [])),
+                video_ids=json.dumps(channel_video_ids.get(ch_id, [])),
             )
             session.add(ch_log)
 
@@ -163,6 +174,9 @@ async def run_video_snapshot_job(
             error_message=str(e),
             started_at=started_at,
             finished_at=datetime.now(timezone.utc),
+            input_payload=None,
+            output_payload=None,
+            video_ids=None,
         )
         session.add(fetch_log)
         await session.commit()
@@ -186,6 +200,9 @@ async def run_video_snapshot_job(
             error_message=str(e),
             started_at=started_at,
             finished_at=datetime.now(timezone.utc),
+            input_payload=None,
+            output_payload=None,
+            video_ids=None,
         )
         session.add(fetch_log)
         await session.commit()

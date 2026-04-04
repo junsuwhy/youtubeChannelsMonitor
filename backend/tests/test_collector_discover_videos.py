@@ -2,9 +2,11 @@ import pytest
 from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from sqlalchemy import select
+import json
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.video import Video
+from youtube_monitor.models.fetch_log import FetchLog
 from youtube_monitor.collector.jobs.discover_videos import run_discover_videos_job
 
 
@@ -215,19 +217,34 @@ async def test_rapid_tracking_set(db_session):
 @pytest.mark.asyncio
 async def test_discover_filters_by_schedule_hour(db_session):
     """Only channels whose schedule_hour matches current_hour are processed."""
-    ch_match = await _add_active_channel(db_session, "UC_hour_match", uploads_playlist_id="PL_hour_match", schedule_hour=11)
-    ch_skip  = await _add_active_channel(db_session, "UC_hour_skip",  uploads_playlist_id="PL_hour_skip",  schedule_hour=5)
+    ch_match = await _add_active_channel(
+        db_session,
+        "UC_hour_match",
+        uploads_playlist_id="PL_hour_match",
+        schedule_hour=11,
+    )
+    ch_skip = await _add_active_channel(
+        db_session, "UC_hour_skip", uploads_playlist_id="PL_hour_skip", schedule_hour=5
+    )
 
     mock_yt = MagicMock()
     mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_new"])
-    mock_yt.get_video_details = AsyncMock(return_value=[{
-        "youtube_video_id": "vid_new",
-        "title": "New",
-        "description": "",
-        "published_at": datetime(2026, 3, 20, 10, 5, tzinfo=timezone.utc),
-        "duration": "PT1M", "tags": [], "topic_categories": [],
-        "view_count": 0, "like_count": 0, "comment_count": 0,
-    }])
+    mock_yt.get_video_details = AsyncMock(
+        return_value=[
+            {
+                "youtube_video_id": "vid_new",
+                "title": "New",
+                "description": "",
+                "published_at": datetime(2026, 3, 20, 10, 5, tzinfo=timezone.utc),
+                "duration": "PT1M",
+                "tags": [],
+                "topic_categories": [],
+                "view_count": 0,
+                "like_count": 0,
+                "comment_count": 0,
+            }
+        ]
+    )
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
         await run_discover_videos_job(db_session, mock_yt, current_hour=11)
@@ -240,17 +257,33 @@ async def test_discover_filters_by_schedule_hour(db_session):
 @pytest.mark.asyncio
 async def test_discover_does_not_update_channel_schedule_hour(db_session):
     """discover_videos 找到新影片後，channel.schedule_hour 不應改變（由 channel_snapshot 負責更新）。"""
-    ch = await _add_active_channel(db_session, "UC_update_hour", uploads_playlist_id="PL_update_hour", schedule_hour=11)
+    ch = await _add_active_channel(
+        db_session,
+        "UC_update_hour",
+        uploads_playlist_id="PL_update_hour",
+        schedule_hour=11,
+    )
 
     mock_yt = MagicMock()
     mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_a"])
-    mock_yt.get_video_details = AsyncMock(return_value=[{
-        "youtube_video_id": "vid_a",
-        "title": "A", "description": "",
-        "published_at": datetime(2026, 3, 20, 6, 30, tzinfo=timezone.utc),  # UTC 06:30 = Taipei 14:30
-        "duration": "PT1M", "tags": [], "topic_categories": [],
-        "view_count": 0, "like_count": 0, "comment_count": 0,
-    }])
+    mock_yt.get_video_details = AsyncMock(
+        return_value=[
+            {
+                "youtube_video_id": "vid_a",
+                "title": "A",
+                "description": "",
+                "published_at": datetime(
+                    2026, 3, 20, 6, 30, tzinfo=timezone.utc
+                ),  # UTC 06:30 = Taipei 14:30
+                "duration": "PT1M",
+                "tags": [],
+                "topic_categories": [],
+                "view_count": 0,
+                "like_count": 0,
+                "comment_count": 0,
+            }
+        ]
+    )
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
         await run_discover_videos_job(db_session, mock_yt, current_hour=11)
@@ -262,21 +295,71 @@ async def test_discover_does_not_update_channel_schedule_hour(db_session):
 @pytest.mark.asyncio
 async def test_discover_sets_video_schedule_hour(db_session):
     """New videos get schedule_hour = (published_at.hour + 1) % 24."""
-    await _add_active_channel(db_session, "UC_vid_hour", uploads_playlist_id="PL_vid_hour", schedule_hour=11)
+    await _add_active_channel(
+        db_session, "UC_vid_hour", uploads_playlist_id="PL_vid_hour", schedule_hour=11
+    )
 
     mock_yt = MagicMock()
     mock_yt.get_uploads_playlist_items = AsyncMock(return_value=["vid_b"])
-    mock_yt.get_video_details = AsyncMock(return_value=[{
-        "youtube_video_id": "vid_b",
-        "title": "B", "description": "",
-        "published_at": datetime(2026, 3, 20, 15, 0, tzinfo=timezone.utc),  # UTC 15:00 = Taipei 23:00, hour 23 → wraps to 0
-        "duration": "PT1M", "tags": [], "topic_categories": [],
-        "view_count": 0, "like_count": 0, "comment_count": 0,
-    }])
+    mock_yt.get_video_details = AsyncMock(
+        return_value=[
+            {
+                "youtube_video_id": "vid_b",
+                "title": "B",
+                "description": "",
+                "published_at": datetime(
+                    2026, 3, 20, 15, 0, tzinfo=timezone.utc
+                ),  # UTC 15:00 = Taipei 23:00, hour 23 → wraps to 0
+                "duration": "PT1M",
+                "tags": [],
+                "topic_categories": [],
+                "view_count": 0,
+                "like_count": 0,
+                "comment_count": 0,
+            }
+        ]
+    )
 
     with patch(PATCH_TARGET, return_value=KNOWN_DATE):
         await run_discover_videos_job(db_session, mock_yt, current_hour=11)
 
-    result = await db_session.execute(select(Video).where(Video.youtube_video_id == "vid_b"))
+    result = await db_session.execute(
+        select(Video).where(Video.youtube_video_id == "vid_b")
+    )
     video = result.scalar_one()
     assert video.schedule_hour == 0  # (23 + 1) % 24
+
+
+@pytest.mark.asyncio
+async def test_discover_videos_records_payload(db_session):
+    channel = await _add_active_channel(
+        db_session,
+        "UC_payload_discover",
+        "Payload Discover Channel",
+        uploads_playlist_id="PL_payload_discover",
+    )
+
+    new_ids = ["disc_vid1", "disc_vid2", "disc_vid3"]
+    mock_client = MagicMock()
+    mock_client.get_uploads_playlist_items = AsyncMock(return_value=new_ids)
+    mock_client.get_video_details = AsyncMock(return_value=make_video_details(new_ids))
+
+    with patch(PATCH_TARGET, return_value=KNOWN_DATE):
+        await run_discover_videos_job(db_session, mock_client, current_hour=6)
+
+    logs = (await db_session.execute(select(FetchLog))).scalars().all()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert log.input_payload is not None
+    input_data = json.loads(log.input_payload)
+    assert input_data["playlist_id"] == "PL_payload_discover"
+
+    assert log.output_payload is not None
+    output_data = json.loads(log.output_payload)
+    assert output_data["new_count"] == 3
+    assert set(output_data["video_ids"]) == set(new_ids)
+
+    assert log.video_ids is not None
+    stored_ids = json.loads(log.video_ids)
+    assert set(stored_ids) == set(new_ids)

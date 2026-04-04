@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date, datetime, timezone
 from sqlalchemy import select
+import json
 
 from youtube_monitor.models.channel import Channel
 from youtube_monitor.models.video import Video
@@ -233,7 +234,14 @@ async def test_video_private_excluded(db_session):
     channel = await _add_channel(db_session)
 
     recent_dt = datetime(2026, 3, 10, tzinfo=timezone.utc)
-    await _add_video(db_session, channel.id, "priv_vid1", published_at=recent_dt, status="private", schedule_hour=8)
+    await _add_video(
+        db_session,
+        channel.id,
+        "priv_vid1",
+        published_at=recent_dt,
+        status="private",
+        schedule_hour=8,
+    )
 
     mock_client = MagicMock()
     mock_client.get_video_details = AsyncMock(return_value=[])
@@ -255,12 +263,16 @@ async def test_video_snapshot_filters_by_schedule_hour(db_session):
     """Only videos with matching schedule_hour are snapshotted."""
     channel = await _add_channel(db_session)
     v_match = await _add_video(
-        db_session, channel.id, "vid_match",
+        db_session,
+        channel.id,
+        "vid_match",
         published_at=datetime(2026, 3, 20, 10, 0, tzinfo=timezone.utc),
         schedule_hour=8,
     )
     v_skip = await _add_video(
-        db_session, channel.id, "vid_skip",
+        db_session,
+        channel.id,
+        "vid_skip",
         published_at=datetime(2026, 3, 20, 5, 0, tzinfo=timezone.utc),
         schedule_hour=3,
     )
@@ -268,7 +280,10 @@ async def test_video_snapshot_filters_by_schedule_hour(db_session):
     mock_yt = MagicMock()
     mock_yt.get_video_details = AsyncMock(return_value=[make_video_detail("vid_match")])
 
-    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+    with patch(
+        "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
+        return_value=TODAY,
+    ):
         result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
 
     assert result["videos_processed"] == 1
@@ -280,7 +295,9 @@ async def test_video_snapshot_no_tier_logic(db_session):
     """All public videos with matching schedule_hour are included regardless of age."""
     channel = await _add_channel(db_session)
     old_video = await _add_video(
-        db_session, channel.id, "vid_old",
+        db_session,
+        channel.id,
+        "vid_old",
         published_at=datetime(2020, 1, 1, 7, 0, tzinfo=timezone.utc),
         schedule_hour=8,
     )
@@ -288,7 +305,10 @@ async def test_video_snapshot_no_tier_logic(db_session):
     mock_yt = MagicMock()
     mock_yt.get_video_details = AsyncMock(return_value=[make_video_detail("vid_old")])
 
-    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+    with patch(
+        "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
+        return_value=TODAY,
+    ):
         result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
 
     assert result["videos_processed"] == 1
@@ -300,14 +320,19 @@ async def test_video_snapshot_empty_no_fetch_log(db_session):
     channel = await _add_channel(db_session)
     # 只有 schedule_hour=3 的影片，跑 current_hour=8 的 job
     await _add_video(
-        db_session, channel.id, "vid_wrong_hour",
+        db_session,
+        channel.id,
+        "vid_wrong_hour",
         published_at=datetime(2026, 3, 20, 1, 0, tzinfo=timezone.utc),
         schedule_hour=3,
     )
 
     mock_yt = MagicMock()
 
-    with patch("youtube_monitor.collector.jobs.video_snapshot.get_taipei_date", return_value=TODAY):
+    with patch(
+        "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
+        return_value=TODAY,
+    ):
         result = await run_video_snapshot_job(db_session, mock_yt, current_hour=8)
 
     assert result["status"] == "success"
@@ -315,3 +340,41 @@ async def test_video_snapshot_empty_no_fetch_log(db_session):
     logs = (await db_session.execute(select(FetchLog))).scalars().all()
     assert len(logs) == 0, "空跑不應寫 FetchLog"
     mock_yt.get_video_details.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_video_snapshot_records_payload(db_session):
+    channel = await _add_channel(db_session)
+
+    recent_dt = datetime(2026, 3, 10, tzinfo=timezone.utc)
+    video_ids = ["payload_vid1", "payload_vid2"]
+    for vid_id in video_ids:
+        await _add_video(db_session, channel.id, vid_id, published_at=recent_dt)
+
+    mock_client = MagicMock()
+    mock_client.get_video_details = AsyncMock(
+        return_value=[make_video_detail(vid_id) for vid_id in video_ids]
+    )
+
+    with patch(
+        "youtube_monitor.collector.jobs.video_snapshot.get_taipei_date",
+        return_value=TODAY,
+    ):
+        await run_video_snapshot_job(db_session, mock_client, current_hour=8)
+
+    logs = (await db_session.execute(select(FetchLog))).scalars().all()
+    assert len(logs) == 1
+    log = logs[0]
+
+    assert log.input_payload is not None
+    input_data = json.loads(log.input_payload)
+    assert "video_ids" in input_data
+    assert set(input_data["video_ids"]) == set(video_ids)
+
+    assert log.output_payload is not None
+    output_data = json.loads(log.output_payload)
+    assert len(output_data) == 2
+
+    assert log.video_ids is not None
+    stored_ids = json.loads(log.video_ids)
+    assert set(stored_ids) == set(video_ids)

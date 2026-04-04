@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -71,10 +72,14 @@ async def run_discover_videos_job(
             ch_units = 0
             ch_status = "success"
             ch_error = None
+            ch_new_video_ids: list[str] = []
+            ch_playlist_id: str | None = None
 
             try:
                 # Step 1: Get uploads_playlist_id
                 playlist_id = channel.uploads_playlist_id
+                if playlist_id:
+                    ch_playlist_id = playlist_id
                 if not playlist_id:
                     # Need to call the API to get it
                     channel_data = await youtube_client.get_channel_info(
@@ -109,6 +114,7 @@ async def run_discover_videos_job(
                             await session.commit()
 
                 if playlist_id and ch_status == "success":
+                    ch_playlist_id = playlist_id
                     # Step 2: Fetch video IDs from playlist (up to 200, max_pages=4)
                     video_ids = await youtube_client.get_uploads_playlist_items(
                         playlist_id, max_pages=4
@@ -130,11 +136,16 @@ async def run_discover_videos_job(
                             )
                         )
                         existing_ids = set(existing_result.scalars().all())
-                        new_video_ids = [vid for vid in video_ids if vid not in existing_ids]
+                        new_video_ids = [
+                            vid for vid in video_ids if vid not in existing_ids
+                        ]
+                        ch_new_video_ids = new_video_ids
 
                         if new_video_ids:
                             # Step 4: Fetch details for new videos only
-                            video_details = await youtube_client.get_video_details(new_video_ids)
+                            video_details = await youtube_client.get_video_details(
+                                new_video_ids
+                            )
                             detail_units = max(1, (len(new_video_ids) + 49) // 50)
                             ch_units += detail_units
                             api_units_used += detail_units
@@ -145,7 +156,9 @@ async def run_discover_videos_job(
                                 yt_video_id = video_data["youtube_video_id"]
                                 pub_at = video_data.get("published_at")
                                 video_schedule_hour = (
-                                    (pub_at.astimezone(TAIPEI_TZ).hour + 1) % 24 if pub_at else current_hour
+                                    (pub_at.astimezone(TAIPEI_TZ).hour + 1) % 24
+                                    if pub_at
+                                    else current_hour
                                 )
                                 stmt = sqlite_insert(Video).values(
                                     youtube_video_id=yt_video_id,
@@ -176,7 +189,9 @@ async def run_discover_videos_job(
                                 await session.execute(stmt)
 
                                 video_result = await session.execute(
-                                    select(Video.id).where(Video.youtube_video_id == yt_video_id)
+                                    select(Video.id).where(
+                                        Video.youtube_video_id == yt_video_id
+                                    )
                                 )
                                 video_db_id = video_result.scalar_one()
 
@@ -225,6 +240,13 @@ async def run_discover_videos_job(
                 error_message=ch_error,
                 started_at=ch_started_at,
                 finished_at=datetime.now(timezone.utc),
+                input_payload=json.dumps({"playlist_id": ch_playlist_id})
+                if ch_playlist_id
+                else None,
+                output_payload=json.dumps(
+                    {"new_count": len(ch_new_video_ids), "video_ids": ch_new_video_ids}
+                ),
+                video_ids=json.dumps(ch_new_video_ids),
             )
             session.add(ch_log)
 
@@ -249,6 +271,9 @@ async def run_discover_videos_job(
             error_message=str(e),
             started_at=started_at,
             finished_at=datetime.now(timezone.utc),
+            input_payload=None,
+            output_payload=None,
+            video_ids=None,
         )
         session.add(fetch_log)
         await session.commit()
@@ -272,6 +297,9 @@ async def run_discover_videos_job(
             error_message=str(e),
             started_at=started_at,
             finished_at=datetime.now(timezone.utc),
+            input_payload=None,
+            output_payload=None,
+            video_ids=None,
         )
         session.add(fetch_log)
         await session.commit()

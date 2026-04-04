@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -69,6 +70,7 @@ async def run_channel_snapshot_job(
             ch_started_at = datetime.now(timezone.utc)
             ch_status = "success"
             ch_error = None
+            data = None
 
             try:
                 data = await youtube_client.get_channel_info(channel.youtube_channel_id)
@@ -118,7 +120,9 @@ async def run_channel_snapshot_job(
 
                     # Run anomaly detection for this channel (non-fatal)
                     try:
-                        from youtube_monitor.services.anomaly_detector import AnomalyDetector
+                        from youtube_monitor.services.anomaly_detector import (
+                            AnomalyDetector,
+                        )
                         from youtube_monitor.crud.anomaly import create_anomaly_events
                         from sqlalchemy import select as _select
                         from youtube_monitor.models.channel_snapshot import (
@@ -134,18 +138,23 @@ async def run_channel_snapshot_job(
                         recent_snaps = list(snap_result.scalars().all())
                         if len(recent_snaps) >= 7:
                             detector = AnomalyDetector()
-                            events = detector.detect_channel_anomalies(channel.id, recent_snaps)
+                            events = detector.detect_channel_anomalies(
+                                channel.id, recent_snaps
+                            )
                             if events:
                                 await create_anomaly_events(session, events)
                     except Exception as _e:
                         logger.warning(
-                            "Anomaly detection failed for channel %s: %s", channel.id, _e
+                            "Anomaly detection failed for channel %s: %s",
+                            channel.id,
+                            _e,
                         )
 
                     # Update schedule_hour based on latest video published_at (Taipei)
                     latest_pub_result = await session.execute(
-                        select(func.max(Video.published_at))
-                        .where(Video.channel_id == channel.id)
+                        select(func.max(Video.published_at)).where(
+                            Video.channel_id == channel.id
+                        )
                     )
                     latest_pub = latest_pub_result.scalar()
                     if latest_pub:
@@ -176,6 +185,11 @@ async def run_channel_snapshot_job(
                 error_message=ch_error,
                 started_at=ch_started_at,
                 finished_at=datetime.now(timezone.utc),
+                input_payload=json.dumps({"channel_id": channel.youtube_channel_id}),
+                output_payload=json.dumps(data)
+                if ch_status == "success" and data is not None
+                else None,
+                video_ids=None,
             )
             session.add(ch_log)
 
@@ -199,6 +213,9 @@ async def run_channel_snapshot_job(
             error_message=str(e),
             started_at=started_at,
             finished_at=datetime.now(timezone.utc),
+            input_payload=None,
+            output_payload=None,
+            video_ids=None,
         )
         session.add(fetch_log)
         await session.commit()
