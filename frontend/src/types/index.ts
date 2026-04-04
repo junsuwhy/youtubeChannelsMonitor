@@ -143,6 +143,9 @@ export interface FetchLog {
   started_at: string | null;
   finished_at: string | null;
   channel_id: number | null;
+  input_payload?: string | null;
+  output_payload?: string | null;
+  video_ids?: string[];
 }
 
 export interface FetchLogListResponse {

@@ -3,7 +3,7 @@ import type {
   Channel, ChannelListResponse, ChannelSnapshot,
   Video, VideoListResponse, VideoSnapshot,
   AnomalyListResponse,
-  FetchLogListResponse, StatsOverview, QuotaResponse,
+  FetchLog, FetchLogListResponse, StatsOverview, QuotaResponse,
   TrendingVideosResponse, TrendingChannelsResponse,
   DailyStatResponse,
 } from "@/types/index";
@@ -149,6 +149,11 @@ export async function fetchFetchLogs(params?: {
 }): Promise<FetchLogListResponse> {
   const res = await api.get("/system/logs", { params });
   return res.data;
+}
+
+export async function fetchFetchLog(id: number): Promise<FetchLog> {
+  const response = await api.get(`/system/logs/${id}`);
+  return response.data;
 }
 
 export async function updateChannel(id: number, data: Partial<Pick<Channel, "status" | "tags" | "source" | "notes">>): Promise<Channel> {
